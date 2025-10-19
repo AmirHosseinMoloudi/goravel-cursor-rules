@@ -531,6 +531,7 @@ globs: "*.go,*.md"         # File-specific application
 
 ### 🎯 Custom Rules
 Create your own rules following the same pattern:
+
 ```markdown
 ---
 alwaysApply: true
@@ -542,9 +543,7 @@ alwaysApply: true
 - More requirements
 
 ## Examples
-```go
-// Your examples here
-```
+// Your Go code examples here
 ```
 
 ## 🎯 Contributing
