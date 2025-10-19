@@ -1,0 +1,1040 @@
+---
+alwaysApply: true
+---
+
+# Goravel API Documentation with Swagger & Postman
+
+**MANDATORY**: Always implement comprehensive API documentation with Swagger/OpenAPI and generate Postman collections for all API endpoints.
+
+## API Documentation Requirements
+
+### Mandatory Documentation Standards
+- **EVERY** API endpoint must have Swagger/OpenAPI documentation
+- **EVERY** API endpoint must be included in Postman collection
+- **EVERY** request/response must be documented with examples
+- **EVERY** authentication method must be documented
+- **EVERY** error response must be documented with examples
+
+### Prohibited Undocumented APIs
+```go
+// ❌ FORBIDDEN - Undocumented API endpoints
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // No Swagger documentation
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "user": user,
+    })
+}
+
+// ❌ FORBIDDEN - Missing Postman collection entries
+facades.Route().Get("/users/{id}", userController.Show)
+```
+
+### Required API Documentation Patterns
+```go
+// ✅ REQUIRED - Complete Swagger documentation
+// @Summary Get user by ID
+// @Description Retrieve a specific user by their ID with full details
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} UserResponse "User retrieved successfully"
+// @Failure 400 {object} ErrorResponse "Invalid user ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized access"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Router /api/v1/users/{id} [get]
+// @Security BearerAuth
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+            "code": "USER_NOT_FOUND",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "user": user,
+        "meta": map[string]interface{}{
+            "timestamp": time.Now().Unix(),
+        },
+    })
+}
+```
+
+## Swagger/OpenAPI Implementation
+
+### Swagger Configuration
+```go
+// ✅ REQUIRED - Swagger configuration
+// main.go
+package main
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/fiber"
+    "goravel/bootstrap"
+    "github.com/swaggo/swag"
+    "github.com/swaggo/gin-swagger"
+    "github.com/swaggo/files"
+    _ "goravel/docs" // Import generated docs
+)
+
+func main() {
+    bootstrap.Boot()
+    
+    // Swagger documentation
+    facades.Route().Get("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+    
+    facades.Route().Run(":8080")
+}
+
+// ✅ REQUIRED - Swagger main documentation
+// docs/docs.go
+// @title Goravel API
+// @version 1.0
+// @description Comprehensive API documentation for Goravel application
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name X-API-Key
+// @description API Key for authentication
+
+// @securityDefinitions.basic BasicAuth
+// @description Basic authentication with username and password
+
+// @tag.name users
+// @tag.description User management operations
+
+// @tag.name auth
+// @tag.description Authentication and authorization
+
+// @tag.name posts
+// @tag.description Post management operations
+
+// @tag.name admin
+// @tag.description Administrative operations
+```
+
+### Response Models
+```go
+// ✅ REQUIRED - Response models for Swagger
+// app/models/api_responses.go
+package models
+
+// UserResponse represents a user API response
+type UserResponse struct {
+    ID        uint      `json:"id" example:"1"`
+    Name      string    `json:"name" example:"John Doe"`
+    Email     string    `json:"email" example:"john@example.com"`
+    IsActive  bool      `json:"is_active" example:"true"`
+    CreatedAt time.Time `json:"created_at" example:"2023-01-01T00:00:00Z"`
+    UpdatedAt time.Time `json:"updated_at" example:"2023-01-01T00:00:00Z"`
+}
+
+// UserListResponse represents a paginated user list response
+type UserListResponse struct {
+    Data       []UserResponse `json:"data"`
+    Pagination PaginationMeta `json:"pagination"`
+}
+
+// PaginationMeta represents pagination metadata
+type PaginationMeta struct {
+    CurrentPage int `json:"current_page" example:"1"`
+    PerPage     int `json:"per_page" example:"10"`
+    Total       int `json:"total" example:"100"`
+    LastPage    int `json:"last_page" example:"10"`
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+    Error   string `json:"error" example:"User not found"`
+    Code    string `json:"code" example:"USER_NOT_FOUND"`
+    Message string `json:"message" example:"The requested user could not be found"`
+}
+
+// SuccessResponse represents a success response
+type SuccessResponse struct {
+    Success bool        `json:"success" example:"true"`
+    Data    interface{} `json:"data"`
+    Message string      `json:"message" example:"Operation completed successfully"`
+}
+```
+
+### Request Models
+```go
+// ✅ REQUIRED - Request models for Swagger
+// app/models/api_requests.go
+package models
+
+// CreateUserRequest represents a create user request
+type CreateUserRequest struct {
+    Name     string `json:"name" binding:"required,min=2,max=100" example:"John Doe"`
+    Email    string `json:"email" binding:"required,email" example:"john@example.com"`
+    Password string `json:"password" binding:"required,min=8" example:"password123"`
+    Age      int    `json:"age" binding:"min=18,max=120" example:"25"`
+}
+
+// UpdateUserRequest represents an update user request
+type UpdateUserRequest struct {
+    Name     string `json:"name" binding:"omitempty,min=2,max=100" example:"John Doe"`
+    Email    string `json:"email" binding:"omitempty,email" example:"john@example.com"`
+    Age      int    `json:"age" binding:"omitempty,min=18,max=120" example:"25"`
+    IsActive bool   `json:"is_active" example:"true"`
+}
+
+// LoginRequest represents a login request
+type LoginRequest struct {
+    Email    string `json:"email" binding:"required,email" example:"john@example.com"`
+    Password string `json:"password" binding:"required" example:"password123"`
+}
+
+// LoginResponse represents a login response
+type LoginResponse struct {
+    Token string      `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+    User  UserResponse `json:"user"`
+}
+```
+
+## Complete API Documentation Examples
+
+### User Management APIs
+```go
+// ✅ REQUIRED - Complete user API documentation
+// app/http/controllers/user_controller.go
+package controllers
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+    "time"
+)
+
+type UserController struct {
+    userService UserServiceInterface
+}
+
+// @Summary Get all users
+// @Description Retrieve a paginated list of all users
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1) minimum(1)
+// @Param per_page query int false "Items per page" default(10) minimum(1) maximum(100)
+// @Param search query string false "Search term for name or email"
+// @Param sort query string false "Sort field" Enums(id,name,email,created_at) default(created_at)
+// @Param order query string false "Sort order" Enums(asc,desc) default(desc)
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.UserListResponse "Users retrieved successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid request parameters"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/users [get]
+// @Security BearerAuth
+func (c *UserController) Index(ctx http.Context) http.Response {
+    page := ctx.Request().QueryInt("page", 1)
+    perPage := ctx.Request().QueryInt("per_page", 10)
+    search := ctx.Request().Query("search", "")
+    sort := ctx.Request().Query("sort", "created_at")
+    order := ctx.Request().Query("order", "desc")
+    
+    users, total, err := c.userService.GetUsers(page, perPage, search, sort, order)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to retrieve users",
+            "code": "USERS_RETRIEVAL_FAILED",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "data": users,
+        "pagination": map[string]interface{}{
+            "current_page": page,
+            "per_page":     perPage,
+            "total":        total,
+            "last_page":    (total + perPage - 1) / perPage,
+        },
+    })
+}
+
+// @Summary Get user by ID
+// @Description Retrieve a specific user by their ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID" minimum(1)
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.UserResponse "User retrieved successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid user ID"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 404 {object} models.ErrorResponse "User not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/users/{id} [get]
+// @Security BearerAuth
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+            "code": "USER_NOT_FOUND",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "user": user,
+    })
+}
+
+// @Summary Create new user
+// @Description Create a new user account
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body models.CreateUserRequest true "User data"
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 201 {object} models.UserResponse "User created successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid input data"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 409 {object} models.ErrorResponse "User already exists"
+// @Failure 422 {object} models.ErrorResponse "Validation failed"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/users [post]
+// @Security BearerAuth
+func (c *UserController) Store(ctx http.Context) http.Response {
+    var req models.CreateUserRequest
+    if err := ctx.Request().Bind(&req); err != nil {
+        return ctx.Response().Json(http.StatusUnprocessableEntity, http.Json{
+            "error": "Validation failed",
+            "code": "VALIDATION_ERROR",
+            "details": err.Error(),
+        })
+    }
+    
+    user, err := c.userService.CreateUser(req)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+            "code": "USER_CREATION_FAILED",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusCreated, http.Json{
+        "user": user,
+        "message": "User created successfully",
+    })
+}
+
+// @Summary Update user
+// @Description Update an existing user
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID" minimum(1)
+// @Param user body models.UpdateUserRequest true "User data"
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.UserResponse "User updated successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid input data"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 404 {object} models.ErrorResponse "User not found"
+// @Failure 422 {object} models.ErrorResponse "Validation failed"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/users/{id} [put]
+// @Security BearerAuth
+func (c *UserController) Update(ctx http.Context) http.Response {
+    var req models.UpdateUserRequest
+    if err := ctx.Request().Bind(&req); err != nil {
+        return ctx.Response().Json(http.StatusUnprocessableEntity, http.Json{
+            "error": "Validation failed",
+            "code": "VALIDATION_ERROR",
+            "details": err.Error(),
+        })
+    }
+    
+    user, err := c.userService.UpdateUser(ctx.Request().RouteInt("id"), req)
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+            "code": "USER_NOT_FOUND",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "user": user,
+        "message": "User updated successfully",
+    })
+}
+
+// @Summary Delete user
+// @Description Delete a user account
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID" minimum(1)
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.SuccessResponse "User deleted successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 404 {object} models.ErrorResponse "User not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/users/{id} [delete]
+// @Security BearerAuth
+func (c *UserController) Destroy(ctx http.Context) http.Response {
+    err := c.userService.DeleteUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+            "code": "USER_NOT_FOUND",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "success": true,
+        "message": "User deleted successfully",
+    })
+}
+```
+
+### Authentication APIs
+```go
+// ✅ REQUIRED - Complete authentication API documentation
+// app/http/controllers/auth_controller.go
+package controllers
+
+// @Summary User login
+// @Description Authenticate user and return JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body models.LoginRequest true "Login credentials"
+// @Success 200 {object} models.LoginResponse "Login successful"
+// @Failure 400 {object} models.ErrorResponse "Invalid request"
+// @Failure 401 {object} models.ErrorResponse "Invalid credentials"
+// @Failure 422 {object} models.ErrorResponse "Validation failed"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/login [post]
+func (c *AuthController) Login(ctx http.Context) http.Response {
+    var req models.LoginRequest
+    if err := ctx.Request().Bind(&req); err != nil {
+        return ctx.Response().Json(http.StatusUnprocessableEntity, http.Json{
+            "error": "Validation failed",
+            "code": "VALIDATION_ERROR",
+            "details": err.Error(),
+        })
+    }
+    
+    user, token, err := c.authService.Login(req.Email, req.Password)
+    if err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+            "code": "INVALID_CREDENTIALS",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "token": token,
+        "user": user,
+        "message": "Login successful",
+    })
+}
+
+// @Summary User logout
+// @Description Logout user and invalidate token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.SuccessResponse "Logout successful"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/logout [post]
+// @Security BearerAuth
+func (c *AuthController) Logout(ctx http.Context) http.Response {
+    err := c.authService.Logout(ctx)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Logout failed",
+            "code": "LOGOUT_FAILED",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "success": true,
+        "message": "Logout successful",
+    })
+}
+
+// @Summary Refresh token
+// @Description Refresh JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Bearer token" default(Bearer {token})
+// @Success 200 {object} models.LoginResponse "Token refreshed successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized access"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/refresh [post]
+// @Security BearerAuth
+func (c *AuthController) Refresh(ctx http.Context) http.Response {
+    user, token, err := c.authService.RefreshToken(ctx)
+    if err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Token refresh failed",
+            "code": "TOKEN_REFRESH_FAILED",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "token": token,
+        "user": user,
+        "message": "Token refreshed successfully",
+    })
+}
+```
+
+## Postman Collection Generation
+
+### Postman Collection Structure
+```go
+// ✅ REQUIRED - Postman collection generator
+// app/console/commands/generate_postman_collection.go
+package commands
+
+import (
+    "encoding/json"
+    "github.com/goravel/framework/contracts/console"
+    "github.com/goravel/framework/contracts/console/command"
+    "github.com/goravel/framework/facades"
+    "os"
+    "time"
+)
+
+type GeneratePostmanCollection struct{}
+
+func (c *GeneratePostmanCollection) Signature() string {
+    return "api:generate-postman"
+}
+
+func (c *GeneratePostmanCollection) Description() string {
+    return "Generate Postman collection for API endpoints"
+}
+
+func (c *GeneratePostmanCollection) Handle(ctx console.Context) error {
+    collection := PostmanCollection{
+        Info: PostmanInfo{
+            Name:        "Goravel API Collection",
+            Description: "Complete API collection for Goravel application",
+            Schema:      "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            Version:     "1.0.0",
+        },
+        Auth: PostmanAuth{
+            Type: "bearer",
+            Bearer: []PostmanAuthBearer{
+                {
+                    Key:   "token",
+                    Value: "{{auth_token}}",
+                    Type:  "string",
+                },
+            },
+        },
+        Variable: []PostmanVariable{
+            {
+                Key:   "base_url",
+                Value: "http://localhost:8080",
+                Type:  "string",
+            },
+            {
+                Key:   "auth_token",
+                Value: "",
+                Type:  "string",
+            },
+        },
+        Item: []PostmanItem{
+            // Authentication endpoints
+            {
+                Name: "Authentication",
+                Item: []PostmanItem{
+                    {
+                        Name: "Login",
+                        Request: PostmanRequest{
+                            Method: "POST",
+                            Header: []PostmanHeader{
+                                {
+                                    Key:   "Content-Type",
+                                    Value: "application/json",
+                                },
+                            },
+                            Body: PostmanBody{
+                                Mode: "raw",
+                                Raw: `{
+                                    "email": "admin@example.com",
+                                    "password": "password123"
+                                }`,
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/auth/login",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "auth", "login"},
+                            },
+                        },
+                        Response: []PostmanResponse{
+                            {
+                                Name: "Successful Login",
+                                OriginalRequest: PostmanRequest{
+                                    Method: "POST",
+                                    Header: []PostmanHeader{
+                                        {
+                                            Key:   "Content-Type",
+                                            Value: "application/json",
+                                        },
+                                    },
+                                    Body: PostmanBody{
+                                        Mode: "raw",
+                                        Raw: `{
+                                            "email": "admin@example.com",
+                                            "password": "password123"
+                                        }`,
+                                    },
+                                    URL: PostmanURL{
+                                        Raw:  "{{base_url}}/api/v1/auth/login",
+                                        Host: []string{"{{base_url}}"},
+                                        Path: []string{"api", "v1", "auth", "login"},
+                                    },
+                                },
+                                Status:                 "OK",
+                                Code:                   200,
+                                PostmanPreviewLanguage: "json",
+                                Header: []PostmanHeader{
+                                    {
+                                        Key:   "Content-Type",
+                                        Value: "application/json",
+                                    },
+                                },
+                                Body: `{
+                                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                                    "user": {
+                                        "id": 1,
+                                        "name": "Admin User",
+                                        "email": "admin@example.com",
+                                        "is_active": true,
+                                        "created_at": "2023-01-01T00:00:00Z",
+                                        "updated_at": "2023-01-01T00:00:00Z"
+                                    },
+                                    "message": "Login successful"
+                                }`,
+                            },
+                        },
+                    },
+                    {
+                        Name: "Logout",
+                        Request: PostmanRequest{
+                            Method: "POST",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            Header: []PostmanHeader{
+                                {
+                                    Key:   "Content-Type",
+                                    Value: "application/json",
+                                },
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/auth/logout",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "auth", "logout"},
+                            },
+                        },
+                    },
+                    {
+                        Name: "Refresh Token",
+                        Request: PostmanRequest{
+                            Method: "POST",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            Header: []PostmanHeader{
+                                {
+                                    Key:   "Content-Type",
+                                    Value: "application/json",
+                                },
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/auth/refresh",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "auth", "refresh"},
+                            },
+                        },
+                    },
+                },
+            },
+            // User management endpoints
+            {
+                Name: "Users",
+                Item: []PostmanItem{
+                    {
+                        Name: "Get All Users",
+                        Request: PostmanRequest{
+                            Method: "GET",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/users?page=1&per_page=10&search=&sort=created_at&order=desc",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "users"},
+                                Query: []PostmanQuery{
+                                    {
+                                        Key:   "page",
+                                        Value: "1",
+                                    },
+                                    {
+                                        Key:   "per_page",
+                                        Value: "10",
+                                    },
+                                    {
+                                        Key:   "search",
+                                        Value: "",
+                                    },
+                                    {
+                                        Key:   "sort",
+                                        Value: "created_at",
+                                    },
+                                    {
+                                        Key:   "order",
+                                        Value: "desc",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    {
+                        Name: "Get User by ID",
+                        Request: PostmanRequest{
+                            Method: "GET",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/users/1",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "users", "1"},
+                            },
+                        },
+                    },
+                    {
+                        Name: "Create User",
+                        Request: PostmanRequest{
+                            Method: "POST",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            Header: []PostmanHeader{
+                                {
+                                    Key:   "Content-Type",
+                                    Value: "application/json",
+                                },
+                            },
+                            Body: PostmanBody{
+                                Mode: "raw",
+                                Raw: `{
+                                    "name": "John Doe",
+                                    "email": "john@example.com",
+                                    "password": "password123",
+                                    "age": 25
+                                }`,
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/users",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "users"},
+                            },
+                        },
+                    },
+                    {
+                        Name: "Update User",
+                        Request: PostmanRequest{
+                            Method: "PUT",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            Header: []PostmanHeader{
+                                {
+                                    Key:   "Content-Type",
+                                    Value: "application/json",
+                                },
+                            },
+                            Body: PostmanBody{
+                                Mode: "raw",
+                                Raw: `{
+                                    "name": "John Updated",
+                                    "email": "john.updated@example.com",
+                                    "age": 26,
+                                    "is_active": true
+                                }`,
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/users/1",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "users", "1"},
+                            },
+                        },
+                    },
+                    {
+                        Name: "Delete User",
+                        Request: PostmanRequest{
+                            Method: "DELETE",
+                            Auth: PostmanAuth{
+                                Type: "bearer",
+                                Bearer: []PostmanAuthBearer{
+                                    {
+                                        Key:   "token",
+                                        Value: "{{auth_token}}",
+                                        Type:  "string",
+                                    },
+                                },
+                            },
+                            URL: PostmanURL{
+                                Raw:  "{{base_url}}/api/v1/users/1",
+                                Host: []string{"{{base_url}}"},
+                                Path: []string{"api", "v1", "users", "1"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+    
+    // Generate JSON
+    jsonData, err := json.MarshalIndent(collection, "", "  ")
+    if err != nil {
+        return err
+    }
+    
+    // Write to file
+    err = os.WriteFile("postman_collection.json", jsonData, 0644)
+    if err != nil {
+        return err
+    }
+    
+    ctx.Info("Postman collection generated successfully: postman_collection.json")
+    return nil
+}
+
+// Postman collection structures
+type PostmanCollection struct {
+    Info      PostmanInfo        `json:"info"`
+    Auth      PostmanAuth        `json:"auth,omitempty"`
+    Variable  []PostmanVariable  `json:"variable,omitempty"`
+    Item      []PostmanItem      `json:"item"`
+}
+
+type PostmanInfo struct {
+    Name        string `json:"name"`
+    Description string `json:"description"`
+    Schema      string `json:"schema"`
+    Version     string `json:"version"`
+}
+
+type PostmanAuth struct {
+    Type   string              `json:"type"`
+    Bearer []PostmanAuthBearer `json:"bearer,omitempty"`
+}
+
+type PostmanAuthBearer struct {
+    Key   string `json:"key"`
+    Value string `json:"value"`
+    Type  string `json:"type"`
+}
+
+type PostmanVariable struct {
+    Key   string `json:"key"`
+    Value string `json:"value"`
+    Type  string `json:"type"`
+}
+
+type PostmanItem struct {
+    Name     string           `json:"name"`
+    Request  PostmanRequest   `json:"request,omitempty"`
+    Response []PostmanResponse `json:"response,omitempty"`
+    Item     []PostmanItem    `json:"item,omitempty"`
+}
+
+type PostmanRequest struct {
+    Method string          `json:"method"`
+    Header []PostmanHeader `json:"header,omitempty"`
+    Body   PostmanBody     `json:"body,omitempty"`
+    URL    PostmanURL      `json:"url"`
+    Auth   PostmanAuth     `json:"auth,omitempty"`
+}
+
+type PostmanHeader struct {
+    Key   string `json:"key"`
+    Value string `json:"value"`
+}
+
+type PostmanBody struct {
+    Mode string `json:"mode"`
+    Raw  string `json:"raw,omitempty"`
+}
+
+type PostmanURL struct {
+    Raw   string          `json:"raw"`
+    Host  []string       `json:"host"`
+    Path  []string       `json:"path"`
+    Query []PostmanQuery `json:"query,omitempty"`
+}
+
+type PostmanQuery struct {
+    Key   string `json:"key"`
+    Value string `json:"value"`
+}
+
+type PostmanResponse struct {
+    Name                   string           `json:"name"`
+    OriginalRequest        PostmanRequest   `json:"originalRequest"`
+    Status                 string           `json:"status"`
+    Code                   int              `json:"code"`
+    PostmanPreviewLanguage string           `json:"_postman_previewlanguage"`
+    Header                 []PostmanHeader  `json:"header"`
+    Body                   string           `json:"body"`
+}
+```
+
+### Postman Collection Registration
+```go
+// ✅ REQUIRED - Register Postman command
+// app/console/kernel.go
+func (kernel Kernel) Commands() []console.Command {
+    return []console.Command{
+        &commands.GeneratePostmanCollection{},
+        // ... other commands
+    }
+}
+```
+
+## API Documentation Best Practices
+
+### Documentation Standards
+- **Complete Coverage**: Document every API endpoint
+- **Request/Response Examples**: Provide realistic examples
+- **Error Scenarios**: Document all possible error responses
+- **Authentication**: Document all authentication methods
+- **Rate Limiting**: Document rate limiting information
+- **Versioning**: Document API versioning strategy
+
+### Swagger Best Practices
+- **Consistent Naming**: Use consistent naming conventions
+- **Clear Descriptions**: Write clear, descriptive summaries
+- **Proper Tags**: Organize endpoints with appropriate tags
+- **Security Schemes**: Define security schemes properly
+- **Response Models**: Use proper response models
+- **Validation**: Document input validation rules
+
+### Postman Best Practices
+- **Environment Variables**: Use environment variables for URLs and tokens
+- **Pre-request Scripts**: Use scripts for dynamic values
+- **Tests**: Include automated tests in Postman
+- **Documentation**: Include comprehensive documentation
+- **Examples**: Provide realistic request/response examples
+- **Authentication**: Set up proper authentication
+
+## Development Guidelines
+
+### API Documentation Workflow
+1. **Design First**: Design API endpoints before implementation
+2. **Document Early**: Document endpoints during development
+3. **Test Documentation**: Test all documented endpoints
+4. **Update Regularly**: Keep documentation up to date
+5. **Review Process**: Review documentation for accuracy
+6. **User Feedback**: Gather feedback on documentation quality
+
+### Quality Assurance
+- **Accuracy**: Ensure documentation matches implementation
+- **Completeness**: Verify all endpoints are documented
+- **Examples**: Test all provided examples
+- **Consistency**: Maintain consistent documentation style
+- **Usability**: Ensure documentation is user-friendly
+- **Accessibility**: Make documentation accessible to all users
+
+## Best Practices Summary
+
+### Design Principles
+- **User-Centric**: Design documentation for API consumers
+- **Comprehensive**: Cover all aspects of the API
+- **Accurate**: Ensure documentation matches implementation
+- **Maintainable**: Keep documentation up to date
+- **Accessible**: Make documentation easy to find and use
+
+### Implementation Guidelines
+- **Automation**: Automate documentation generation where possible
+- **Validation**: Validate documentation against implementation
+- **Testing**: Test all documented endpoints
+- **Monitoring**: Monitor documentation usage and feedback
+- **Improvement**: Continuously improve documentation quality
+
+### Maintenance Guidelines
+- **Regular Updates**: Update documentation with code changes
+- **Version Control**: Track documentation changes
+- **Feedback Loop**: Establish feedback mechanisms
+- **Quality Metrics**: Measure documentation quality
+- **Training**: Train team members on documentation standards
