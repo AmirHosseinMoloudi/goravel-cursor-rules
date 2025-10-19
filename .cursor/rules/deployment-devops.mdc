@@ -1,0 +1,76 @@
+---
+alwaysApply: true
+---
+# Deployment & DevOps for Goravel
+
+## Docker Configuration
+- Use multi-stage builds for smaller images
+- Use Alpine Linux base images for security
+- Implement proper layer caching
+- Use .dockerignore to exclude unnecessary files
+- Implement health checks in containers
+
+For detailed Goravel compilation and Docker setup, see the [Goravel Compilation & Deployment Guide](mdc:.cursor/rules/goravel-compilation-deployment.mdc).
+
+## Environment Management
+- Use different configurations for different environments
+- Implement proper secret management
+- Use environment-specific database configurations
+- Implement proper logging configurations
+- Use feature flags for gradual rollouts
+
+## CI/CD Pipeline
+- Implement automated testing in CI
+- Use proper build caching
+- Implement automated security scanning
+- Use proper deployment strategies
+- Implement rollback procedures
+
+## Database Migrations
+- Use version-controlled migrations
+- Implement proper migration rollbacks
+- Use migration testing in CI
+- Implement data migration strategies
+- Use proper migration ordering
+
+## Monitoring & Observability
+- Implement application metrics
+- Use distributed tracing
+- Implement proper logging
+- Use monitoring dashboards
+- Implement alerting for critical issues
+
+## Backup & Recovery
+- Implement automated backups
+- Test backup restoration procedures
+- Implement disaster recovery plans
+- Use proper backup retention policies
+- Implement data archiving strategies
+
+## Security in Deployment
+- Use secure container registries
+- Implement proper access controls
+- Use network security policies
+- Implement proper secret management
+- Use security scanning in CI/CD
+
+## Scaling Strategies
+- Implement horizontal scaling
+- Use load balancers effectively
+- Implement auto-scaling policies
+- Use database read replicas
+- Implement caching strategies
+
+## Goravel-Specific Deployment
+- Use framework's built-in deployment features
+- Implement proper queue worker deployment
+- Use framework's task scheduling in production
+- Implement proper logging configuration
+- Use framework's caching in production
+
+## Infrastructure as Code
+- Use Terraform or similar tools
+- Implement proper resource tagging
+- Use infrastructure versioning
+- Implement proper resource monitoring
+- Use automated infrastructure testing

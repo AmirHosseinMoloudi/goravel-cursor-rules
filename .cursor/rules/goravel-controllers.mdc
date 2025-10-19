@@ -1,0 +1,405 @@
+---
+alwaysApply: true
+---
+
+# Goravel Controllers
+
+Based on the [official Goravel controllers documentation](https://www.goravel.dev/the-basics/controllers.html).
+
+## Controller Overview
+
+### Introduction
+- **Request Processing**: Controllers handle HTTP request processing logic
+- **Separation of Concerns**: Separate request logic from route definitions
+- **Organization**: Controllers stored in [app/http/controllers/](mdc:app/http/controllers/) directory
+- **Integration**: Controllers integrate with routes for clean architecture
+
+### Key Concepts
+- **Request Handling**: Process incoming HTTP requests
+- **Response Generation**: Generate appropriate HTTP responses
+- **Business Logic**: Implement application business logic
+- **Service Integration**: Integrate with services and dependencies
+
+## Defining Controllers
+
+### Basic Controller Structure
+```go
+package controllers
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+)
+
+type UserController struct {
+    // Dependent services
+    userService UserService
+    logger      Logger
+}
+
+func NewUserController() *UserController {
+    return &UserController{
+        // Inject services
+    }
+}
+
+func (r *UserController) Show(ctx http.Context) http.Response {
+    return ctx.Response().Success().Json(http.Json{
+        "Hello": "Goravel",
+    })
+}
+```
+
+### Controller Components
+- **Struct Definition**: Controller struct with dependencies
+- **Constructor**: `NewUserController()` for dependency injection
+- **Method Signatures**: Methods that accept `http.Context` and return `http.Response`
+- **Service Integration**: Inject services for business logic
+
+### Common Controller Patterns
+```go
+// Controller with service dependencies
+type UserController struct {
+    userService UserService
+    logger      Logger
+}
+
+func NewUserController(userService UserService, logger Logger) *UserController {
+    return &UserController{
+        userService: userService,
+        logger:      logger,
+    }
+}
+
+// Controller method with error handling
+func (c *UserController) Show(ctx http.Context) http.Response {
+    id := ctx.Request().Input("id")
+    
+    user, err := c.userService.FindByID(id)
+    if err != nil {
+        c.logger.Error("Failed to find user", map[string]any{"id": id, "error": err})
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Creating Controllers
+
+### Artisan Command
+```bash
+# Create basic controller
+go run . artisan make:controller UserController
+
+# Create controller in nested folder
+go run . artisan make:controller user/UserController
+
+# Create resource controller
+go run . artisan make:controller --resource PhotoController
+```
+
+### Manual Creation
+- **Location**: Create in [app/http/controllers/](mdc:app/http/controllers/) directory
+- **Package Structure**: Follow Go package conventions
+- **Naming**: Use descriptive names with "Controller" suffix
+- **Organization**: Group related controllers in subdirectories
+
+## Resource Controllers
+
+### Resource Controller Concept
+- **CRUD Operations**: Create, Read, Update, Delete operations
+- **RESTful Design**: Follow REST conventions for resource handling
+- **Single Controller**: Handle all operations for a resource type
+- **Route Mapping**: Automatic route mapping for resource operations
+
+### Creating Resource Controllers
+```bash
+# Create resource controller with all CRUD methods
+go run . artisan make:controller --resource PhotoController
+```
+
+### Resource Controller Structure
+```go
+// Generated resource controller
+type PhotoController struct {
+    photoService PhotoService
+}
+
+func NewPhotoController() *PhotoController {
+    return &PhotoController{}
+}
+
+// GET /photos
+func (c *PhotoController) Index(ctx http.Context) http.Response {
+    // List all photos
+}
+
+// POST /photos
+func (c *PhotoController) Store(ctx http.Context) http.Response {
+    // Create new photo
+}
+
+// GET /photos/{photo}
+func (c *PhotoController) Show(ctx http.Context) http.Response {
+    // Show specific photo
+}
+
+// PUT/PATCH /photos/{photo}
+func (c *PhotoController) Update(ctx http.Context) http.Response {
+    // Update photo
+}
+
+// DELETE /photos/{photo}
+func (c *PhotoController) Destroy(ctx http.Context) http.Response {
+    // Delete photo
+}
+```
+
+### Resource Route Registration
+```go
+// Register resource routes
+facades.Route().Resource("photos", controllers.NewPhotoController())
+```
+
+### Resource Route Mapping
+| Verb      | URI             | Action  | Description           |
+|-----------|-----------------|---------|-----------------------|
+| GET       | /photos         | Index   | List all photos       |
+| POST      | /photos         | Store   | Create new photo      |
+| GET       | /photos/{photo} | Show    | Show specific photo   |
+| PUT/PATCH | /photos/{photo} | Update  | Update photo          |
+| DELETE    | /photos/{photo} | Destroy | Delete photo          |
+
+## Controller Best Practices
+
+### Design Principles
+- **Single Responsibility**: Each controller should handle one resource
+- **Thin Controllers**: Keep controllers thin, delegate to services
+- **Dependency Injection**: Inject dependencies through constructor
+- **Error Handling**: Handle errors gracefully and return appropriate responses
+
+### Common Patterns
+```go
+// Controller with validation
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Validate input
+    if err := c.validateUserInput(ctx); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": err.Error(),
+        })
+    }
+    
+    // Create user
+    user, err := c.userService.Create(ctx.Request().All())
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+        })
+    }
+    
+    return ctx.Response().Created().Json(http.Json{
+        "user": user,
+    })
+}
+
+// Controller with pagination
+func (c *UserController) Index(ctx http.Context) http.Response {
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    users, total, err := c.userService.Paginate(page, limit)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "users": users,
+        "pagination": map[string]any{
+            "page":  page,
+            "limit": limit,
+            "total": total,
+        },
+    })
+}
+```
+
+## Controller Integration
+
+### Route Integration
+```go
+// Basic route integration
+package routes
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/app/http/controllers"
+)
+
+func Api() {
+    userController := controllers.NewUserController()
+    facades.Route().Get("/users/{id}", userController.Show)
+    facades.Route().Post("/users", userController.Store)
+    facades.Route().Put("/users/{id}", userController.Update)
+    facades.Route().Delete("/users/{id}", userController.Destroy)
+}
+```
+
+### Service Integration
+```go
+// Controller with service dependencies
+type UserController struct {
+    userService UserService
+    logger      Logger
+    validator   Validator
+}
+
+func NewUserController(userService UserService, logger Logger, validator Validator) *UserController {
+    return &UserController{
+        userService: userService,
+        logger:      logger,
+        validator:   validator,
+    }
+}
+```
+
+### Middleware Integration
+```go
+// Controller with middleware
+facades.Route().Middleware(middleware.Auth()).Group(func(router route.Router) {
+    router.Get("/users", userController.Index)
+    router.Post("/users", userController.Store)
+    router.Get("/users/{id}", userController.Show)
+    router.Put("/users/{id}", userController.Update)
+    router.Delete("/users/{id}", userController.Destroy)
+})
+```
+
+## Response Handling
+
+### Success Responses
+```go
+// Success response with data
+func (c *UserController) Show(ctx http.Context) http.Response {
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+
+// Created response
+func (c *UserController) Store(ctx http.Context) http.Response {
+    return ctx.Response().Created().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+### Error Responses
+```go
+// Error response with status code
+func (c *UserController) Show(ctx http.Context) http.Response {
+    if user == nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+### Validation Responses
+```go
+// Validation error response
+func (c *UserController) Store(ctx http.Context) http.Response {
+    if err := c.validator.Validate(ctx.Request().All()); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Validation failed",
+            "details": err.Error(),
+        })
+    }
+    
+    // Continue with creation
+}
+```
+
+## Testing Controllers
+
+### Unit Testing
+```go
+func TestUserController_Show(t *testing.T) {
+    // Create mock services
+    userService := &MockUserService{}
+    logger := &MockLogger{}
+    
+    // Create controller
+    controller := NewUserController(userService, logger)
+    
+    // Create mock context
+    ctx := &MockContext{}
+    ctx.Request().Set("id", "1")
+    
+    // Test controller method
+    response := controller.Show(ctx)
+    
+    // Assertions
+    assert.Equal(t, http.StatusOK, response.Status())
+}
+```
+
+### Integration Testing
+```go
+func TestUserControllerIntegration(t *testing.T) {
+    // Test with real HTTP requests
+    response := facades.Route().ServeHTTP("GET", "/users/1", nil)
+    assert.Equal(t, http.StatusOK, response.StatusCode)
+}
+```
+
+## Development Guidelines
+
+### Controller Organization
+- **Single Resource**: Each controller should handle one resource type
+- **Clear Naming**: Use descriptive names with "Controller" suffix
+- **Package Structure**: Organize controllers in appropriate packages
+- **Documentation**: Document controller methods and their purposes
+
+### Performance Considerations
+- **Service Delegation**: Delegate business logic to services
+- **Database Optimization**: Use efficient database queries
+- **Caching**: Implement appropriate caching strategies
+- **Response Optimization**: Optimize response generation
+
+### Security Considerations
+- **Input Validation**: Validate all inputs
+- **Authentication**: Implement proper authentication checks
+- **Authorization**: Implement role-based access control
+- **Data Sanitization**: Sanitize user inputs
+
+## Best Practices
+
+### Controller Design
+- **Keep Controllers Thin**: Delegate business logic to services
+- **Handle Errors**: Implement proper error handling
+- **Use Services**: Inject and use service dependencies
+- **Follow REST**: Follow RESTful conventions
+
+### Code Organization
+- **Single Responsibility**: Each controller method should have one responsibility
+- **Consistent Naming**: Use consistent naming conventions
+- **Error Handling**: Implement consistent error handling
+- **Documentation**: Document controller methods and parameters
+
+### Testing
+- **Unit Tests**: Test individual controller methods
+- **Integration Tests**: Test controller integration with services
+- **Mock Dependencies**: Mock external dependencies
+- **Test Coverage**: Aim for high test coverage

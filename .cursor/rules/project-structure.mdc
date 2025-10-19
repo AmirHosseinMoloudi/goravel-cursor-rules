@@ -1,0 +1,37 @@
+---
+alwaysApply: true
+---
+
+# Goravel Project Structure Guide
+
+This is a Goravel project - a Laravel-inspired Go framework for building high-performance web applications.
+
+## Key Project Files
+- [go.mod](mdc:go.mod) - Go module definition and dependencies
+- [main.go](mdc:main.go) - Application entry point
+- [config/](mdc:config/) - Configuration files directory
+- [app/](mdc:app/) - Application logic (Controllers, Models, Services)
+- [routes/](mdc:routes/) - Route definitions
+- [database/](mdc:database/) - Database migrations and seeders
+- [storage/](mdc:storage/) - File storage and logs
+- [public/](mdc:public/) - Public web assets
+
+## Directory Structure
+For detailed directory structure information, see the [Goravel Directory Structure Guide](mdc:.cursor/rules/goravel-directory-structure.mdc).
+
+## Architecture & Lifecycle
+For understanding Goravel's request lifecycle and architecture concepts, see the [Goravel Architecture & Lifecycle Guide](mdc:.cursor/rules/goravel-architecture-lifecycle.mdc).
+
+## Framework Philosophy
+- Follow Laravel conventions adapted for Go
+- Use dependency injection and service containers
+- Implement MVC architecture
+- Support for ORM, HTTP routing, queues, caching, and logging
+- Easy deployment with Docker support
+
+## Development Principles
+- Write clean, readable Go code
+- Follow Laravel-style naming conventions where applicable
+- Use interfaces for testability
+- Implement proper error handling
+- Follow Go best practices for performance

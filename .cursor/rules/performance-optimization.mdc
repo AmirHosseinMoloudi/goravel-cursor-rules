@@ -1,0 +1,74 @@
+---
+alwaysApply: true
+---
+# Performance Optimization for Goravel
+
+## Database Optimization
+- Use proper database indexing
+- Implement query optimization
+- Use database connection pooling
+- Implement read replicas for read-heavy workloads
+- Use database query caching
+
+## Caching Strategies
+- Implement multi-level caching (application, database, CDN)
+- Use cache tags for efficient invalidation
+- Implement cache warming strategies
+- Use appropriate cache TTL values
+- Monitor cache hit rates
+
+## Memory Management
+- Use object pooling for frequently created objects
+- Implement proper garbage collection tuning
+- Use streaming for large data processing
+- Implement memory profiling
+- Use appropriate data structures
+
+## Concurrency & Parallelism
+- Use goroutines for concurrent operations
+- Implement proper synchronization
+- Use channels for communication
+- Implement worker pools for background tasks
+- Use context for cancellation
+
+## HTTP Performance
+- Implement HTTP/2 support
+- Use compression (gzip, brotli)
+- Implement proper caching headers
+- Use CDN for static assets
+- Optimize response sizes
+
+## Queue Performance
+- Use appropriate queue drivers
+- Implement queue monitoring
+- Use queue workers efficiently
+- Implement job prioritization
+- Monitor queue performance
+
+## Application Monitoring
+- Implement performance metrics
+- Use APM tools for monitoring
+- Implement health checks
+- Monitor resource usage
+- Implement alerting for performance issues
+
+## Code Optimization
+- Profile code for bottlenecks
+- Use appropriate algorithms and data structures
+- Implement lazy loading where appropriate
+- Use connection pooling
+- Optimize hot code paths
+
+## Infrastructure Optimization
+- Use appropriate server resources
+- Implement horizontal scaling
+- Use load balancers effectively
+- Implement auto-scaling
+- Use container orchestration
+
+## Goravel-Specific Optimizations
+- Use framework caching features
+- Implement proper middleware optimization
+- Use framework's built-in performance features
+- Optimize ORM queries
+- Use framework's queue system efficiently

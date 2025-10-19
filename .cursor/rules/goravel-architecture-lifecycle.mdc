@@ -1,0 +1,169 @@
+---
+alwaysApply: true
+---
+
+# Goravel Architecture & Request Lifecycle
+
+Based on the [official Goravel request lifecycle documentation](https://www.goravel.dev/architecture-concepts/request-lifecycle.html).
+
+## Request Lifecycle Overview
+
+### Application Entry Point
+- **[main.go](mdc:main.go)** serves as the entry point for all requests
+- Uses `bootstrap.Boot()` function to initialize the framework
+- Creates Goravel application instance with `foundation.NewApplication()`
+
+### Application Initialization Process
+
+#### 1. Framework Bootstrap
+```go
+// main.go - Entry point
+bootstrap.Boot()
+```
+
+#### 2. Application Creation
+```go
+// bootstrap/app.go
+app := foundation.NewApplication()
+```
+
+#### 3. Service Provider Loading
+```go
+// Load registered Service Providers
+app.Boot()
+```
+
+#### 4. Configuration Loading
+```go
+// Load configuration files from config directory
+config.Boot()
+```
+
+#### 5. HTTP Server Startup
+```go
+// main.go - Start HTTP server
+facades.Route().Run(facades.Config().GetString("app.host"))
+```
+
+## Architecture Components
+
+### Core Framework Files
+- **[main.go](mdc:main.go)** - Application entry point and HTTP server startup
+- **[bootstrap/app.go](mdc:bootstrap/app.go)** - Application instance creation
+- **[bootstrap/](mdc:bootstrap/)** - Framework initialization and bootstrapping
+
+### Service Container Integration
+- Service Providers are loaded during `app.Boot()`
+- Dependency injection container is initialized
+- Services are bound and registered
+- Application services become available
+
+For detailed service container usage, see the [Goravel Service Container Guide](mdc:.cursor/rules/goravel-service-container.mdc).
+
+### Configuration System
+- Configuration files loaded from [config/](mdc:config/) directory
+- Environment-specific configurations
+- Configuration facades become available
+- Application settings are accessible
+
+### Routing System
+- Routes are registered and available
+- Middleware stack is initialized
+- HTTP server starts listening on configured host
+- Request processing pipeline is ready
+
+## Request Processing Flow
+
+### 1. Request Reception
+- HTTP server receives incoming requests
+- Request is passed to routing system
+- Route matching and middleware execution
+
+### 2. Service Resolution
+- Service container resolves dependencies
+- Services are injected into controllers
+- Business logic execution
+
+### 3. Response Generation
+- Controller processes request
+- Response is generated
+- HTTP response is sent to client
+
+## Development Guidelines
+
+### Application Structure
+- Keep [main.go](mdc:main.go) focused on application startup
+- Use [bootstrap/](mdc:bootstrap/) for framework initialization
+- Register services in appropriate Service Providers
+- Configure application settings in [config/](mdc:config/) directory
+
+### Service Provider Best Practices
+- Register services in `app.Boot()` phase
+- Use dependency injection for service resolution
+- Implement proper service lifecycle management
+- Follow Laravel-style service provider patterns
+
+### Configuration Management
+- Load configuration during `config.Boot()`
+- Use environment-specific configurations
+- Implement configuration validation
+- Use facades for configuration access
+
+### Request Handling
+- Implement proper middleware for cross-cutting concerns
+- Use controllers for request processing
+- Follow MVC architecture patterns
+- Implement proper error handling
+
+## Framework Integration
+
+### Bootstrap Process
+- Framework initialization happens in [bootstrap/](mdc:bootstrap/)
+- Application instance creation
+- Service provider registration
+- Configuration loading
+
+### Service Container
+- Dependency injection container
+- Service binding and resolution
+- Lifecycle management
+- Interface-based design
+
+### Facade System
+- Static access to framework services
+- Configuration facades
+- Route facades
+- Service facades
+
+## Best Practices
+
+### Application Startup
+- Keep startup process clean and focused
+- Use proper error handling during initialization
+- Implement health checks for services
+- Monitor application startup time
+
+### Service Registration
+- Register services in appropriate providers
+- Use interfaces for service contracts
+- Implement proper service lifecycle
+- Follow dependency injection patterns
+
+### Configuration Loading
+- Load configurations in proper order
+- Validate configuration on startup
+- Use environment-specific settings
+- Implement configuration caching
+
+### Request Processing
+- Implement proper middleware stack
+- Use controllers for business logic
+- Follow RESTful patterns
+- Implement proper error handling
+
+## Development Workflow
+- Understand the request lifecycle for debugging
+- Use proper service registration patterns
+- Implement configuration management
+- Follow framework architecture principles
+- Use facades for framework service access

@@ -1,0 +1,761 @@
+---
+alwaysApply: true
+---
+
+# Goravel Database Getting Started
+
+Based on the [official Goravel database getting started documentation](https://www.goravel.dev/database/getting-started.html).
+
+## Database Overview
+
+### Introduction
+- **Database Interaction**: Goravel provides simple and easy-to-use database interaction
+- **Multiple Approaches**: Developers can use native SQL, query builder, and ORM to interact with databases
+- **Official Support**: Currently supports four major databases with dedicated drivers
+- **Flexible Architecture**: Choose the right approach for your specific needs
+
+### Supported Databases
+| Database   | Driver                                                               |
+|------------|----------------------------------------------------------------------|
+| PostgreSQL | [github.com/goravel/postgres](https://github.com/goravel/postgres)   |
+| MySQL      | [github.com/goravel/mysql](https://github.com/goravel/mysql)         |
+| SQL Server | [github.com/goravel/sqlserver](https://github.com/goravel/sqlserver) |
+| SQLite     | [github.com/goravel/sqlite](https://github.com/goravel/sqlite)       |
+
+### Key Concepts
+- **DB Facade**: Access database functionality through `facades.DB()`
+- **Native SQL**: Direct SQL query execution
+- **Query Builder**: Fluent query building interface
+- **ORM**: Object-Relational Mapping for model-based operations
+- **Transactions**: ACID-compliant database operations
+
+## Configuration
+
+### Database Configuration File
+```go
+// config/database.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/contracts/database"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("database", map[string]interface{}{
+        // Database Configuration
+        //
+        // Default database connection
+        "default": config.Env("DB_CONNECTION", "mysql"),
+
+        // Database connections
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "forge"),
+                "username": config.Env("DB_USERNAME", ""),
+                "password": config.Env("DB_PASSWORD", ""),
+                "charset":  "utf8mb4",
+                "collation": "utf8mb4_unicode_ci",
+                "prefix":   "",
+                "strict":   true,
+                "engine":   "",
+            },
+            "postgres": map[string]any{
+                "driver":   "postgres",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 5432),
+                "database": config.Env("DB_DATABASE", "forge"),
+                "username": config.Env("DB_USERNAME", ""),
+                "password": config.Env("DB_PASSWORD", ""),
+                "charset":  "utf8",
+                "prefix":   "",
+                "sslmode":  "prefer",
+            },
+            "sqlite": map[string]any{
+                "driver":   "sqlite",
+                "database": config.Env("DB_DATABASE", "database/database.sqlite"),
+                "prefix":   "",
+            },
+            "sqlserver": map[string]any{
+                "driver":   "sqlserver",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 1433),
+                "database": config.Env("DB_DATABASE", "forge"),
+                "username": config.Env("DB_USERNAME", ""),
+                "password": config.Env("DB_PASSWORD", ""),
+                "charset":  "utf8",
+                "prefix":   "",
+            },
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Database configuration
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=goravel
+DB_USERNAME=root
+DB_PASSWORD=
+
+# PostgreSQL
+DB_CONNECTION=postgres
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=goravel
+DB_USERNAME=postgres
+DB_PASSWORD=
+
+# SQLite
+DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite
+
+# SQL Server
+DB_CONNECTION=sqlserver
+DB_HOST=127.0.0.1
+DB_PORT=1433
+DB_DATABASE=goravel
+DB_USERNAME=sa
+DB_PASSWORD=
+```
+
+### Connection Pool Configuration
+```go
+// Connection pool configuration for improved concurrency performance
+"connections": map[string]any{
+    "mysql": map[string]any{
+        "driver": "mysql",
+        "host":   config.Env("DB_HOST", "127.0.0.1"),
+        "port":   config.Env("DB_PORT", 3306),
+        "database": config.Env("DB_DATABASE", "forge"),
+        "username": config.Env("DB_USERNAME", ""),
+        "password": config.Env("DB_PASSWORD", ""),
+        "charset":  "utf8mb4",
+        
+        // Connection pool settings
+        "pool": map[string]any{
+            "max_idle_conns":    10,  // Maximum idle connections
+            "max_open_conns":    100, // Maximum connections
+            "conn_max_idletime": 300, // Connection maximum idle time (seconds)
+            "conn_max_lifetime": 3600, // Connection maximum lifetime (seconds)
+        },
+    },
+}
+```
+
+### Read-Write Splitting Configuration
+```go
+import "github.com/goravel/framework/contracts/database"
+
+// Read-write splitting configuration
+"connections": map[string]any{
+    "mysql": map[string]any{
+        "driver": "mysql",
+        "read": []database.Config{
+            {Host: "192.168.1.1", Port: 3306, Database: "forge", Username: "root", Password: "123123"},
+            {Host: "192.168.1.3", Port: 3306, Database: "forge", Username: "root", Password: "123123"},
+        },
+        "write": []database.Config{
+            {Host: "192.168.1.2", Port: 3306, Database: "forge", Username: "root", Password: "123123"},
+            {Host: "192.168.1.4", Port: 3306, Database: "forge", Username: "root", Password: "123123"},
+        },
+        "host":     config.Env("DB_HOST", "127.0.0.1"),
+        "port":     config.Env("DB_PORT", 3306),
+        "database": config.Env("DB_DATABASE", "forge"),
+        "username": config.Env("DB_USERNAME", ""),
+        "password": config.Env("DB_PASSWORD", ""),
+        "charset":  "utf8mb4",
+    },
+}
+```
+
+## Running Native SQL Queries
+
+### Select Queries
+
+#### Basic Select Operations
+```go
+// Get multiple records
+var products []Product
+err := facades.DB().Select(&products, "SELECT * FROM products")
+
+// Get a single record
+var product Product
+err := facades.DB().Select(&product, "SELECT * FROM products WHERE id = ?", 1)
+
+// Select with parameters
+var users []User
+err := facades.DB().Select(&users, "SELECT * FROM users WHERE active = ? AND created_at > ?", true, "2023-01-01")
+```
+
+#### Advanced Select Operations
+```go
+// Complex select with joins
+var results []struct {
+    UserID   uint   `db:"user_id"`
+    UserName string `db:"user_name"`
+    PostID   uint   `db:"post_id"`
+    PostTitle string `db:"post_title"`
+}
+
+err := facades.DB().Select(&results, `
+    SELECT u.id as user_id, u.name as user_name, p.id as post_id, p.title as post_title
+    FROM users u
+    INNER JOIN posts p ON u.id = p.user_id
+    WHERE u.active = ? AND p.published = ?
+`, true, true)
+
+// Select with aggregation
+var stats struct {
+    TotalUsers    int `db:"total_users"`
+    ActiveUsers   int `db:"active_users"`
+    TotalPosts    int `db:"total_posts"`
+}
+
+err := facades.DB().Select(&stats, `
+    SELECT 
+        COUNT(DISTINCT u.id) as total_users,
+        COUNT(DISTINCT CASE WHEN u.active = 1 THEN u.id END) as active_users,
+        COUNT(DISTINCT p.id) as total_posts
+    FROM users u
+    LEFT JOIN posts p ON u.id = p.user_id
+`)
+```
+
+#### Database-Specific Placeholders
+```go
+// MySQL uses ? placeholder
+var user User
+err := facades.DB().Select(&user, "SELECT * FROM users WHERE id = ? AND email = ?", 1, "test@example.com")
+
+// PostgreSQL uses @ placeholder
+var user User
+err := facades.DB().Connection("postgres").Select(&user, "SELECT * FROM users WHERE id = @1 AND email = @2", 1, "test@example.com")
+
+// SQL Server uses @ placeholder
+var user User
+err := facades.DB().Connection("sqlserver").Select(&user, "SELECT * FROM users WHERE id = @p1 AND email = @p2", 1, "test@example.com")
+```
+
+### Insert Operations
+
+#### Basic Insert Operations
+```go
+// Simple insert
+result, err := facades.DB().Insert("INSERT INTO users (name, email) VALUES (?, ?)", "Goravel", "goravel@example.com")
+
+// Insert with multiple values
+result, err := facades.DB().Insert(`
+    INSERT INTO users (name, email, created_at, updated_at) 
+    VALUES (?, ?, NOW(), NOW())
+`, "John Doe", "john@example.com")
+
+// Insert and get last insert ID
+result, err := facades.DB().Insert("INSERT INTO users (name, email) VALUES (?, ?)", "Jane Doe", "jane@example.com")
+if err == nil {
+    lastID := result.LastInsertId
+    facades.Log().Info("User created", map[string]any{"user_id": lastID})
+}
+```
+
+#### Advanced Insert Operations
+```go
+// Batch insert
+users := []struct {
+    Name  string
+    Email string
+}{
+    {"User 1", "user1@example.com"},
+    {"User 2", "user2@example.com"},
+    {"User 3", "user3@example.com"},
+}
+
+for _, user := range users {
+    _, err := facades.DB().Insert("INSERT INTO users (name, email) VALUES (?, ?)", user.Name, user.Email)
+    if err != nil {
+        facades.Log().Error("Failed to insert user", map[string]any{"user": user, "error": err})
+    }
+}
+
+// Insert with conflict handling (PostgreSQL)
+result, err := facades.DB().Connection("postgres").Insert(`
+    INSERT INTO users (name, email) 
+    VALUES (@1, @2) 
+    ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+`, "Updated Name", "existing@example.com")
+```
+
+### Update Operations
+
+#### Basic Update Operations
+```go
+// Simple update
+result, err := facades.DB().Update("UPDATE users SET name = ? WHERE id = ?", "Updated Name", 1)
+
+// Update multiple fields
+result, err := facades.DB().Update(`
+    UPDATE users 
+    SET name = ?, email = ?, updated_at = NOW() 
+    WHERE id = ?
+`, "New Name", "newemail@example.com", 1)
+
+// Update with conditions
+result, err := facades.DB().Update(`
+    UPDATE users 
+    SET active = 0 
+    WHERE last_login < ? AND active = 1
+`, "2023-01-01")
+```
+
+#### Advanced Update Operations
+```go
+// Update with joins
+result, err := facades.DB().Update(`
+    UPDATE users u
+    INNER JOIN profiles p ON u.id = p.user_id
+    SET u.name = ?, p.bio = ?
+    WHERE u.id = ? AND p.verified = 1
+`, "Updated Name", "Updated Bio", 1)
+
+// Conditional update
+result, err := facades.DB().Update(`
+    UPDATE products 
+    SET stock = stock - ?,
+        updated_at = NOW()
+    WHERE id = ? AND stock >= ?
+`, 5, 1, 5)
+```
+
+### Delete Operations
+
+#### Basic Delete Operations
+```go
+// Simple delete
+result, err := facades.DB().Delete("DELETE FROM users WHERE id = ?", 1)
+
+// Delete with conditions
+result, err := facades.DB().Delete(`
+    DELETE FROM users 
+    WHERE created_at < ? AND active = 0
+`, "2022-01-01")
+
+// Soft delete (if using soft delete pattern)
+result, err := facades.DB().Update(`
+    UPDATE users 
+    SET deleted_at = NOW() 
+    WHERE id = ?
+`, 1)
+```
+
+#### Advanced Delete Operations
+```go
+// Delete with joins
+result, err := facades.DB().Delete(`
+    DELETE u FROM users u
+    INNER JOIN user_sessions s ON u.id = s.user_id
+    WHERE s.last_activity < ?
+`, "2023-01-01")
+
+// Cascade delete
+result, err := facades.DB().Delete(`
+    DELETE FROM posts 
+    WHERE user_id = ? AND created_at < ?
+`, 1, "2022-01-01")
+```
+
+### Statement Operations
+
+#### General Statement Execution
+```go
+// Create table
+err := facades.DB().Statement(`
+    CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        price DECIMAL(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`)
+
+// Drop table
+err := facades.DB().Statement("DROP TABLE IF EXISTS old_products")
+
+// Alter table
+err := facades.DB().Statement(`
+    ALTER TABLE users 
+    ADD COLUMN phone VARCHAR(20) AFTER email
+`)
+
+// Create index
+err := facades.DB().Statement(`
+    CREATE INDEX idx_users_email ON users(email)
+`)
+
+// Drop index
+err := facades.DB().Statement(`
+    DROP INDEX idx_users_email ON users
+`)
+```
+
+### Using Multiple Database Connections
+
+#### Connection Selection
+```go
+// Use specific connection
+var user User
+err := facades.DB().Connection("postgres").Select(&user, "SELECT * FROM users WHERE id = ?", 1)
+
+// Use different connections for different operations
+// Read from read replica
+var users []User
+err := facades.DB().Connection("mysql_read").Select(&users, "SELECT * FROM users WHERE active = ?", true)
+
+// Write to master
+result, err := facades.DB().Connection("mysql_write").Insert(`
+    INSERT INTO users (name, email) VALUES (?, ?)
+`, "New User", "newuser@example.com")
+```
+
+#### Connection Management
+```go
+// Get connection instance
+conn := facades.DB().Connection("mysql")
+
+// Use connection for multiple operations
+var user User
+err := conn.Select(&user, "SELECT * FROM users WHERE id = ?", 1)
+
+if err == nil {
+    result, err := conn.Update(`
+        UPDATE users 
+        SET last_login = NOW() 
+        WHERE id = ?
+    `, user.ID)
+}
+```
+
+## Database Transactions
+
+### Automatic Transactions
+
+#### Basic Transaction Usage
+```go
+import "github.com/goravel/framework/contracts/database/db"
+
+// Automatic transaction with rollback on error
+err := facades.DB().Transaction(func(tx db.Tx) error {
+    // Insert user
+    _, err := tx.Insert("INSERT INTO users (name, email) VALUES (?, ?)", "John Doe", "john@example.com")
+    if err != nil {
+        return err // Transaction will be rolled back
+    }
+    
+    // Insert user profile
+    _, err = tx.Insert("INSERT INTO profiles (user_id, bio) VALUES (?, ?)", 1, "User bio")
+    if err != nil {
+        return err // Transaction will be rolled back
+    }
+    
+    return nil // Transaction will be committed
+})
+```
+
+#### Advanced Transaction Usage
+```go
+// Complex transaction with multiple operations
+err := facades.DB().Transaction(func(tx db.Tx) error {
+    // Create order
+    orderResult, err := tx.Insert(`
+        INSERT INTO orders (user_id, total, status) 
+        VALUES (?, ?, ?)
+    `, 1, 99.99, "pending")
+    if err != nil {
+        return err
+    }
+    
+    orderID := orderResult.LastInsertId
+    
+    // Create order items
+    items := []struct {
+        ProductID uint
+        Quantity  int
+        Price     float64
+    }{
+        {1, 2, 29.99},
+        {2, 1, 39.99},
+    }
+    
+    for _, item := range items {
+        _, err := tx.Insert(`
+            INSERT INTO order_items (order_id, product_id, quantity, price) 
+            VALUES (?, ?, ?, ?)
+        `, orderID, item.ProductID, item.Quantity, item.Price)
+        if err != nil {
+            return err
+        }
+    }
+    
+    // Update inventory
+    for _, item := range items {
+        _, err := tx.Update(`
+            UPDATE products 
+            SET stock = stock - ? 
+            WHERE id = ? AND stock >= ?
+        `, item.Quantity, item.ProductID, item.Quantity)
+        if err != nil {
+            return err
+        }
+    }
+    
+    return nil
+})
+```
+
+### Manual Transaction Control
+
+#### Manual Transaction Management
+```go
+// Begin transaction
+tx, err := facades.DB().BeginTransaction()
+if err != nil {
+    return err
+}
+
+// Perform operations
+_, err = tx.Insert("INSERT INTO users (name, email) VALUES (?, ?)", "John Doe", "john@example.com")
+if err != nil {
+    tx.Rollback()
+    return err
+}
+
+_, err = tx.Update("UPDATE users SET last_login = NOW() WHERE id = ?", 1)
+if err != nil {
+    tx.Rollback()
+    return err
+}
+
+// Commit transaction
+err = tx.Commit()
+if err != nil {
+    return err
+}
+```
+
+#### Nested Transactions
+```go
+// Nested transaction handling
+func processUserRegistration(userData map[string]interface{}) error {
+    return facades.DB().Transaction(func(tx db.Tx) error {
+        // Create user
+        userResult, err := tx.Insert(`
+            INSERT INTO users (name, email, password) 
+            VALUES (?, ?, ?)
+        `, userData["name"], userData["email"], userData["password"])
+        if err != nil {
+            return err
+        }
+        
+        userID := userResult.LastInsertId
+        
+        // Create user profile in nested transaction
+        err = createUserProfile(tx, userID, userData)
+        if err != nil {
+            return err
+        }
+        
+        // Send welcome email (non-critical, don't fail transaction)
+        go sendWelcomeEmail(userData["email"].(string))
+        
+        return nil
+    })
+}
+
+func createUserProfile(tx db.Tx, userID int64, userData map[string]interface{}) error {
+    _, err := tx.Insert(`
+        INSERT INTO profiles (user_id, bio, avatar) 
+        VALUES (?, ?, ?)
+    `, userID, userData["bio"], userData["avatar"])
+    
+    return err
+}
+```
+
+## Checking Databases
+
+### Database Overview Commands
+
+#### View All Tables
+```bash
+# View all tables in default database
+go run . artisan db:show
+
+# View all tables in specific database
+go run . artisan db:show --database=postgres
+go run . artisan db:show --database=mysql
+```
+
+#### Table Structure Commands
+```bash
+# View structure of specific table
+go run . artisan db:table users
+
+# View table structure in specific database
+go run . artisan db:table users --database=postgres
+go run . artisan db:table products --database=mysql
+```
+
+### Programmatic Database Inspection
+
+#### Database Information
+```go
+// Get database information programmatically
+func getDatabaseInfo() error {
+    // Get table list
+    var tables []string
+    err := facades.DB().Select(&tables, "SHOW TABLES")
+    if err != nil {
+        return err
+    }
+    
+    facades.Log().Info("Database tables", map[string]any{"tables": tables})
+    
+    // Get table structure
+    var columns []struct {
+        Field   string `db:"Field"`
+        Type    string `db:"Type"`
+        Null    string `db:"Null"`
+        Key     string `db:"Key"`
+        Default string `db:"Default"`
+        Extra   string `db:"Extra"`
+    }
+    
+    err = facades.DB().Select(&columns, "DESCRIBE users")
+    if err != nil {
+        return err
+    }
+    
+    for _, column := range columns {
+        facades.Log().Info("Column info", map[string]any{
+            "field":   column.Field,
+            "type":    column.Type,
+            "null":    column.Null,
+            "key":     column.Key,
+            "default": column.Default,
+        })
+    }
+    
+    return nil
+}
+```
+
+## Advanced Database Patterns
+
+### Connection Pooling
+```go
+// Monitor connection pool
+func monitorConnectionPool() {
+    // Get connection pool stats
+    stats := facades.DB().Stats()
+    
+    facades.Log().Info("Connection pool stats", map[string]any{
+        "max_open_connections": stats.MaxOpenConnections,
+        "open_connections":     stats.OpenConnections,
+        "in_use":              stats.InUse,
+        "idle":                stats.Idle,
+    })
+}
+```
+
+### Read-Write Splitting Implementation
+```go
+// Service for read-write splitting
+type DatabaseService struct {
+}
+
+func NewDatabaseService() *DatabaseService {
+    return &DatabaseService{}
+}
+
+// Read operations use read connection
+func (s *DatabaseService) GetUsers() ([]User, error) {
+    var users []User
+    err := facades.DB().Connection("mysql_read").Select(&users, "SELECT * FROM users WHERE active = ?", true)
+    return users, err
+}
+
+// Write operations use write connection
+func (s *DatabaseService) CreateUser(user User) error {
+    _, err := facades.DB().Connection("mysql_write").Insert(`
+        INSERT INTO users (name, email, password) 
+        VALUES (?, ?, ?)
+    `, user.Name, user.Email, user.Password)
+    return err
+}
+```
+
+### Error Handling
+```go
+// Comprehensive error handling
+func handleDatabaseError(err error, operation string) error {
+    if err != nil {
+        facades.Log().Error("Database operation failed", map[string]any{
+            "operation": operation,
+            "error":     err.Error(),
+        })
+        
+        // Handle specific database errors
+        if strings.Contains(err.Error(), "duplicate entry") {
+            return errors.New("record already exists")
+        }
+        
+        if strings.Contains(err.Error(), "foreign key constraint") {
+            return errors.New("referenced record not found")
+        }
+        
+        return errors.New("database operation failed")
+    }
+    
+    return nil
+}
+```
+
+## Database Best Practices
+
+### Design Principles
+- **Connection Management**: Use appropriate connection pooling settings
+- **Transaction Usage**: Use transactions for related operations
+- **Error Handling**: Implement comprehensive error handling
+- **Performance**: Optimize queries and use appropriate indexes
+
+### Security Considerations
+- **SQL Injection**: Always use parameterized queries
+- **Connection Security**: Use secure connection strings
+- **Access Control**: Implement proper database access controls
+- **Data Validation**: Validate all input data
+
+### Performance Considerations
+- **Query Optimization**: Optimize SQL queries for performance
+- **Connection Pooling**: Configure connection pools appropriately
+- **Read-Write Splitting**: Use read replicas for read operations
+- **Monitoring**: Monitor database performance and connections
+
+## Development Guidelines
+
+### Database Organization
+- **Connection Management**: Use appropriate connections for different operations
+- **Transaction Management**: Use transactions for data consistency
+- **Error Handling**: Handle database errors gracefully
+- **Testing**: Test database operations thoroughly
+
+### Monitoring and Maintenance
+- **Performance Metrics**: Monitor database performance
+- **Connection Monitoring**: Monitor connection pool usage
+- **Error Tracking**: Track database errors and issues
+- **Maintenance**: Regular database maintenance and optimization

@@ -1,0 +1,483 @@
+---
+alwaysApply: true
+---
+
+# Goravel Views
+
+Based on the [official Goravel views documentation](https://www.goravel.dev/the-basics/views.html).
+
+## Views Overview
+
+### Introduction
+- **Separation of Concerns**: Views separate controller/application logic from presentation logic
+- **Template System**: Use HTML templates for rendering dynamic content
+- **File Organization**: Views stored in [resources/views/](mdc:resources/views/) directory
+- **Template Engine**: Default `html/template` engine with `.tmpl` extension
+
+### Key Concepts
+- **View Rendering**: Use `ctx.Response().View()` to render templates
+- **Data Passing**: Pass data to views using maps or structs
+- **Template Syntax**: Go template syntax with `{{ }}` delimiters
+- **View Organization**: Nested directories for better organization
+
+## Creating & Rendering Views
+
+### Basic View Creation
+```go
+// resources/views/welcome.tmpl
+{{ define "welcome.tmpl" }}
+<html>
+  <body>
+    <h1>Hello, {{ .name }}</h1>
+  </body>
+</html>
+{{ end }}
+```
+
+### Rendering Views
+```go
+import "github.com/goravel/framework/facades"
+
+// Render view from route
+facades.Route().Get("/", func(ctx http.Context) http.Response {
+    return ctx.Response().View().Make("welcome.tmpl", map[string]any{
+        "name": "Goravel",
+    })
+})
+
+// Render view from controller
+func (c *HomeController) Index(ctx http.Context) http.Response {
+    return ctx.Response().View().Make("welcome.tmpl", map[string]any{
+        "name": "Goravel",
+    })
+}
+```
+
+### View Template Structure
+```go
+// Basic template structure
+{{ define "template_name.tmpl" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ .title }}</title>
+</head>
+<body>
+    <h1>{{ .heading }}</h1>
+    <p>{{ .content }}</p>
+</body>
+</html>
+{{ end }}
+```
+
+## Nested View Directories
+
+### Directory Organization
+```
+resources/views/
+├── welcome.tmpl
+├── admin/
+│   ├── dashboard.tmpl
+│   └── profile.tmpl
+├── user/
+│   ├── profile.tmpl
+│   └── settings.tmpl
+└── layouts/
+    └── app.tmpl
+```
+
+### Nested View Rendering
+```go
+// resources/views/admin/profile.tmpl
+{{ define "admin/profile.tmpl" }}
+<h1>Welcome to the Admin Panel</h1>
+<p>User: {{ .name }}</p>
+{{ end }}
+
+// Render nested view
+ctx.Response().View().Make("admin/profile.tmpl", map[string]any{
+    "name": "Goravel",
+})
+```
+
+### View Path Patterns
+```go
+// Different view path patterns
+ctx.Response().View().Make("welcome.tmpl", data)                    // resources/views/welcome.tmpl
+ctx.Response().View().Make("admin/dashboard.tmpl", data)            // resources/views/admin/dashboard.tmpl
+ctx.Response().View().Make("user/profile.tmpl", data)               // resources/views/user/profile.tmpl
+ctx.Response().View().Make("layouts/app.tmpl", data)                // resources/views/layouts/app.tmpl
+```
+
+## Advanced View Features
+
+### Creating The First Available View
+```go
+// Use first available view from array
+ctx.Response().View().First([]string{
+    "custom/admin.tmpl",    // Custom view (if exists)
+    "admin.tmpl",          // Default view
+    "layouts/admin.tmpl",  // Fallback view
+}, map[string]any{
+    "name": "Goravel",
+})
+```
+
+### View Existence Check
+```go
+import "github.com/goravel/framework/facades"
+
+// Check if view exists
+if facades.View().Exist("welcome.tmpl") {
+    return ctx.Response().View().Make("welcome.tmpl", data)
+} else {
+    return ctx.Response().String(404, "View not found")
+}
+
+// Conditional view rendering
+func (c *HomeController) Index(ctx http.Context) http.Response {
+    if facades.View().Exist("custom/home.tmpl") {
+        return ctx.Response().View().Make("custom/home.tmpl", data)
+    }
+    return ctx.Response().View().Make("home.tmpl", data)
+}
+```
+
+## Passing Data To Views
+
+### Basic Data Passing
+```go
+// Pass simple data
+ctx.Response().View().Make("welcome.tmpl", map[string]any{
+    "name":    "Goravel",
+    "version": "1.16",
+    "debug":   true,
+})
+
+// Pass complex data
+ctx.Response().View().Make("user.tmpl", map[string]any{
+    "user": map[string]any{
+        "id":    1,
+        "name":  "John Doe",
+        "email": "john@example.com",
+    },
+    "posts": []map[string]any{
+        {"title": "Post 1", "content": "Content 1"},
+        {"title": "Post 2", "content": "Content 2"},
+    },
+})
+```
+
+### Struct Data Passing
+```go
+// Define data structure
+type UserData struct {
+    Name  string
+    Email string
+    Posts []Post
+}
+
+type Post struct {
+    Title   string
+    Content string
+}
+
+// Pass struct data
+userData := UserData{
+    Name:  "John Doe",
+    Email: "john@example.com",
+    Posts: []Post{
+        {Title: "Post 1", Content: "Content 1"},
+        {Title: "Post 2", Content: "Content 2"},
+    },
+}
+
+ctx.Response().View().Make("user.tmpl", map[string]any{
+    "user": userData,
+})
+```
+
+### Template Data Access
+```go
+// Template with data access
+{{ define "user.tmpl" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Profile</title>
+</head>
+<body>
+    <h1>Welcome, {{ .user.Name }}</h1>
+    <p>Email: {{ .user.Email }}</p>
+    
+    <h2>Posts</h2>
+    {{ range .user.Posts }}
+        <div>
+            <h3>{{ .Title }}</h3>
+            <p>{{ .Content }}</p>
+        </div>
+    {{ end }}
+</body>
+</html>
+{{ end }}
+```
+
+## Sharing Data With All Views
+
+### Global View Data
+```go
+// app/providers/app_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/contracts/foundation"
+    "github.com/goravel/framework/facades"
+)
+
+type AppServiceProvider struct {
+}
+
+func (receiver *AppServiceProvider) Register(app foundation.Application) {
+}
+
+func (receiver *AppServiceProvider) Boot(app foundation.Application) {
+    // Share data with all views
+    facades.View().Share("app_name", "Goravel")
+    facades.View().Share("version", "1.16")
+    facades.View().Share("debug", facades.Config().GetBool("app.debug"))
+    
+    // Share user data if authenticated
+    facades.View().Share("user", func() any {
+        if user := facades.Auth().User(); user != nil {
+            return user
+        }
+        return nil
+    })
+}
+```
+
+### Service Provider View Sharing
+```go
+// Custom service provider for view data
+type ViewServiceProvider struct {
+}
+
+func (sp *ViewServiceProvider) Register(app foundation.Application) {
+}
+
+func (sp *ViewServiceProvider) Boot(app foundation.Application) {
+    // Share application settings
+    facades.View().Share("settings", map[string]any{
+        "site_name":    facades.Config().GetString("app.name"),
+        "site_url":     facades.Config().GetString("app.url"),
+        "environment":  facades.Config().GetString("app.env"),
+    })
+    
+    // Share navigation data
+    facades.View().Share("navigation", []map[string]any{
+        {"name": "Home", "url": "/"},
+        {"name": "About", "url": "/about"},
+        {"name": "Contact", "url": "/contact"},
+    })
+}
+```
+
+## Template Features
+
+### Template Conditionals
+```go
+// Template with conditionals
+{{ define "user.tmpl" }}
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Welcome, {{ .user.Name }}</h1>
+    
+    {{ if .user.IsAdmin }}
+        <p>Admin Panel</p>
+    {{ else }}
+        <p>Regular User</p>
+    {{ end }}
+    
+    {{ if .posts }}
+        <h2>Posts</h2>
+        {{ range .posts }}
+            <div>{{ .Title }}</div>
+        {{ end }}
+    {{ else }}
+        <p>No posts found</p>
+    {{ end }}
+</body>
+</html>
+{{ end }}
+```
+
+### Template Loops
+```go
+// Template with loops
+{{ define "posts.tmpl" }}
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Posts</h1>
+    
+    {{ range .posts }}
+        <article>
+            <h2>{{ .Title }}</h2>
+            <p>{{ .Content }}</p>
+            <small>Published: {{ .CreatedAt }}</small>
+        </article>
+    {{ end }}
+    
+    {{ range $index, $post := .posts }}
+        <div>Post {{ $index }}: {{ $post.Title }}</div>
+    {{ end }}
+</body>
+</html>
+{{ end }}
+```
+
+### Template Functions
+```go
+// Template with functions
+{{ define "user.tmpl" }}
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>{{ .user.Name | upper }}</h1>
+    <p>Email: {{ .user.Email | lower }}</p>
+    <p>Joined: {{ .user.CreatedAt | formatDate }}</p>
+    
+    {{ if gt (len .user.Posts) 0 }}
+        <p>User has {{ len .user.Posts }} posts</p>
+    {{ end }}
+</body>
+</html>
+{{ end }}
+```
+
+## View Best Practices
+
+### Template Organization
+- **Layout Templates**: Create base layouts for consistent structure
+- **Component Templates**: Create reusable template components
+- **Nested Directories**: Organize views by feature or module
+- **Naming Conventions**: Use descriptive names for templates
+
+### Data Management
+- **Minimal Data**: Pass only necessary data to views
+- **Global Data**: Use view sharing for common data
+- **Data Validation**: Validate data before passing to views
+- **Performance**: Avoid expensive operations in view rendering
+
+### Security Considerations
+- **Data Sanitization**: Sanitize user data before rendering
+- **XSS Prevention**: Use proper template escaping
+- **Input Validation**: Validate all data passed to views
+- **Template Security**: Secure template file access
+
+## Common View Patterns
+
+### Layout Template
+```go
+// resources/views/layouts/app.tmpl
+{{ define "layouts/app.tmpl" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ .title }} - {{ .app_name }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <header>
+        <nav>
+            {{ range .navigation }}
+                <a href="{{ .url }}">{{ .name }}</a>
+            {{ end }}
+        </nav>
+    </header>
+    
+    <main>
+        {{ .content }}
+    </main>
+    
+    <footer>
+        <p>&copy; {{ .app_name }} {{ .year }}</p>
+    </footer>
+</body>
+</html>
+{{ end }}
+```
+
+### Page Template
+```go
+// resources/views/pages/home.tmpl
+{{ define "pages/home.tmpl" }}
+{{ template "layouts/app.tmpl" . }}
+{{ define "content" }}
+    <h1>Welcome to {{ .app_name }}</h1>
+    <p>Version: {{ .version }}</p>
+    
+    {{ if .user }}
+        <p>Hello, {{ .user.Name }}!</p>
+    {{ else }}
+        <p>Please <a href="/login">login</a></p>
+    {{ end }}
+{{ end }}
+{{ end }}
+```
+
+### Component Template
+```go
+// resources/views/components/user-card.tmpl
+{{ define "components/user-card.tmpl" }}
+<div class="user-card">
+    <h3>{{ .user.Name }}</h3>
+    <p>{{ .user.Email }}</p>
+    {{ if .user.Avatar }}
+        <img src="{{ .user.Avatar }}" alt="{{ .user.Name }}">
+    {{ end }}
+</div>
+{{ end }}
+```
+
+## Development Guidelines
+
+### View Organization
+- **Feature-based**: Organize views by application features
+- **Reusable Components**: Create reusable template components
+- **Layout System**: Implement consistent layout system
+- **Documentation**: Document template usage and data requirements
+
+### Performance Optimization
+- **Template Caching**: Enable template caching in production
+- **Minimal Data**: Pass only necessary data to views
+- **Efficient Rendering**: Optimize template rendering performance
+- **Resource Management**: Manage template resources efficiently
+
+### Testing Views
+- **Template Testing**: Test template rendering with different data
+- **Data Validation**: Validate data passed to views
+- **Error Handling**: Test error scenarios in templates
+- **Integration Testing**: Test complete view rendering flow
+
+## Best Practices
+
+### Template Design
+- **Consistent Structure**: Maintain consistent template structure
+- **Reusable Components**: Create reusable template components
+- **Clear Naming**: Use clear, descriptive template names
+- **Documentation**: Document template usage and data requirements
+
+### Data Handling
+- **Minimal Data**: Pass only necessary data to views
+- **Global Data**: Use view sharing for common data
+- **Data Validation**: Validate all data before rendering
+- **Security**: Sanitize user data before rendering
+
+### Performance
+- **Template Caching**: Enable template caching in production
+- **Efficient Rendering**: Optimize template rendering
+- **Resource Management**: Manage template resources efficiently
+- **Monitoring**: Monitor template rendering performance

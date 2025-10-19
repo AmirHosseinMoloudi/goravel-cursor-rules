@@ -1,0 +1,671 @@
+---
+alwaysApply: true
+---
+
+# Goravel Encryption System
+
+Based on the [official Goravel encryption documentation](https://www.goravel.dev/security/encryption.html).
+
+## Encryption Overview
+
+### Introduction
+- **Simple Interface**: Goravel's encryption services provide a simple, convenient interface for encrypting and decrypting text
+- **OpenSSL Integration**: Uses OpenSSL with AES-256 encryption for secure data protection
+- **Message Authentication**: All encrypted values are signed using a message authentication code (GMAC)
+- **Tamper Protection**: Prevents modification or tampering of encrypted data by malicious users
+
+### Key Concepts
+- **Crypt Facade**: Access encryption functionality through `facades.Crypt()`
+- **AES-256-GCM**: Uses OpenSSL and AES-256-GCM cipher for encryption
+- **GMAC Signing**: All encrypted values are signed with message authentication code
+- **Secure Key Management**: Uses secure cryptographic keys for encryption
+
+## Configuration
+
+### Application Key Configuration
+```go
+// config/app.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("app", map[string]interface{}{
+        // Application Configuration
+        //
+        // Application encryption key
+        "key": config.Env("APP_KEY", ""),
+        
+        // Other app configuration...
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Application encryption key
+APP_KEY=base64:your-encryption-key-here
+```
+
+### Generate Application Key
+```bash
+# Generate secure encryption key using Artisan command
+go run . artisan key:generate
+```
+
+### Key Generation Process
+```go
+// The key:generate command uses Golang's secure random bytes generator
+// to create a secure cryptographic key for your application
+func generateAppKey() string {
+    // Uses crypto/rand for secure random key generation
+    // Returns base64-encoded 32-byte key
+    return "base64:" + base64.StdEncoding.EncodeToString(secureRandomBytes(32))
+}
+```
+
+## Using The Encrypter
+
+### Encrypting A Value
+
+#### Basic String Encryption
+```go
+// Encrypt a string value
+secret, err := facades.Crypt().EncryptString("goravel")
+if err != nil {
+    // Handle encryption error
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to encrypt data",
+    })
+}
+
+// Use encrypted value
+return ctx.Response().Success().Json(http.Json{
+    "encrypted_data": secret,
+})
+```
+
+#### Encrypting Sensitive Data
+```go
+// Encrypt sensitive user data
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Get user input
+    email := ctx.Request().Input("email")
+    phone := ctx.Request().Input("phone")
+    
+    // Encrypt sensitive fields
+    encryptedEmail, err := facades.Crypt().EncryptString(email)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to encrypt email",
+        })
+    }
+    
+    encryptedPhone, err := facades.Crypt().EncryptString(phone)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to encrypt phone",
+        })
+    }
+    
+    // Store encrypted data in database
+    user := models.User{
+        Email: encryptedEmail,
+        Phone: encryptedPhone,
+    }
+    
+    if err := facades.Orm().Query().Create(&user); err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "User created successfully",
+    })
+}
+```
+
+#### Encrypting JSON Data
+```go
+// Encrypt JSON data
+func encryptUserData(userData map[string]interface{}) (string, error) {
+    // Convert to JSON
+    jsonData, err := json.Marshal(userData)
+    if err != nil {
+        return "", err
+    }
+    
+    // Encrypt JSON string
+    return facades.Crypt().EncryptString(string(jsonData))
+}
+
+// Usage
+userData := map[string]interface{}{
+    "name":  "John Doe",
+    "email": "john@example.com",
+    "phone": "+1234567890",
+}
+
+encryptedData, err := encryptUserData(userData)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Encrypting Large Data
+```go
+// Encrypt large data efficiently
+func encryptLargeData(data string) (string, error) {
+    // For large data, consider chunking or compression
+    if len(data) > 1024*1024 { // 1MB limit
+        return "", errors.New("data too large for encryption")
+    }
+    
+    return facades.Crypt().EncryptString(data)
+}
+```
+
+### Decrypting A Value
+
+#### Basic String Decryption
+```go
+// Decrypt a string value
+str, err := facades.Crypt().DecryptString(secret)
+if err != nil {
+    // Handle decryption error
+    return ctx.Response().Json(http.StatusBadRequest, http.Json{
+        "error": "Failed to decrypt data",
+    })
+}
+
+// Use decrypted value
+return ctx.Response().Success().Json(http.Json{
+    "decrypted_data": str,
+})
+```
+
+#### Decrypting Sensitive Data
+```go
+// Decrypt sensitive user data
+func (c *UserController) Show(ctx http.Context) http.Response {
+    userID := ctx.Request().Route("id")
+    var user models.User
+    
+    // Load user from database
+    if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Decrypt sensitive fields
+    decryptedEmail, err := facades.Crypt().DecryptString(user.Email)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to decrypt email",
+        })
+    }
+    
+    decryptedPhone, err := facades.Crypt().DecryptString(user.Phone)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to decrypt phone",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": map[string]interface{}{
+            "id":    user.ID,
+            "email": decryptedEmail,
+            "phone": decryptedPhone,
+        },
+    })
+}
+```
+
+#### Decrypting JSON Data
+```go
+// Decrypt JSON data
+func decryptUserData(encryptedData string) (map[string]interface{}, error) {
+    // Decrypt the data
+    decryptedData, err := facades.Crypt().DecryptString(encryptedData)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Parse JSON
+    var userData map[string]interface{}
+    if err := json.Unmarshal([]byte(decryptedData), &userData); err != nil {
+        return nil, err
+    }
+    
+    return userData, nil
+}
+
+// Usage
+userData, err := decryptUserData(encryptedData)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Error Handling for Decryption
+```go
+// Handle decryption errors
+func safeDecrypt(encryptedData string) (string, error) {
+    if encryptedData == "" {
+        return "", errors.New("encrypted data is empty")
+    }
+    
+    decryptedData, err := facades.Crypt().DecryptString(encryptedData)
+    if err != nil {
+        // Log the error for debugging
+        facades.Log().Error("Decryption failed", map[string]any{
+            "error": err.Error(),
+        })
+        return "", err
+    }
+    
+    return decryptedData, nil
+}
+```
+
+## Advanced Encryption Patterns
+
+### Model Encryption
+```go
+// Model with encrypted fields
+type User struct {
+    ID    uint   `gorm:"primaryKey"`
+    Name  string
+    Email string // Encrypted field
+    Phone string // Encrypted field
+}
+
+// Encrypt before saving
+func (u *User) BeforeSave() error {
+    if u.Email != "" {
+        encryptedEmail, err := facades.Crypt().EncryptString(u.Email)
+        if err != nil {
+            return err
+        }
+        u.Email = encryptedEmail
+    }
+    
+    if u.Phone != "" {
+        encryptedPhone, err := facades.Crypt().EncryptString(u.Phone)
+        if err != nil {
+            return err
+        }
+        u.Phone = encryptedPhone
+    }
+    
+    return nil
+}
+
+// Decrypt after loading
+func (u *User) AfterFind() error {
+    if u.Email != "" {
+        decryptedEmail, err := facades.Crypt().DecryptString(u.Email)
+        if err != nil {
+            return err
+        }
+        u.Email = decryptedEmail
+    }
+    
+    if u.Phone != "" {
+        decryptedPhone, err := facades.Crypt().DecryptString(u.Phone)
+        if err != nil {
+            return err
+        }
+        u.Phone = decryptedPhone
+    }
+    
+    return nil
+}
+```
+
+### Service Layer Encryption
+```go
+// Encryption service
+type EncryptionService struct {
+}
+
+func NewEncryptionService() *EncryptionService {
+    return &EncryptionService{}
+}
+
+// Encrypt sensitive data
+func (s *EncryptionService) EncryptSensitiveData(data map[string]string) (map[string]string, error) {
+    encryptedData := make(map[string]string)
+    
+    for key, value := range data {
+        if s.isSensitiveField(key) {
+            encrypted, err := facades.Crypt().EncryptString(value)
+            if err != nil {
+                return nil, err
+            }
+            encryptedData[key] = encrypted
+        } else {
+            encryptedData[key] = value
+        }
+    }
+    
+    return encryptedData, nil
+}
+
+// Decrypt sensitive data
+func (s *EncryptionService) DecryptSensitiveData(data map[string]string) (map[string]string, error) {
+    decryptedData := make(map[string]string)
+    
+    for key, value := range data {
+        if s.isSensitiveField(key) {
+            decrypted, err := facades.Crypt().DecryptString(value)
+            if err != nil {
+                return nil, err
+            }
+            decryptedData[key] = decrypted
+        } else {
+            decryptedData[key] = value
+        }
+    }
+    
+    return decryptedData, nil
+}
+
+// Check if field is sensitive
+func (s *EncryptionService) isSensitiveField(field string) bool {
+    sensitiveFields := []string{"email", "phone", "ssn", "credit_card", "password"}
+    for _, sensitive := range sensitiveFields {
+        if field == sensitive {
+            return true
+        }
+    }
+    return false
+}
+```
+
+### Configuration Encryption
+```go
+// Encrypt configuration values
+func encryptConfigValue(key, value string) (string, error) {
+    // Encrypt the configuration value
+    encrypted, err := facades.Crypt().EncryptString(value)
+    if err != nil {
+        return "", err
+    }
+    
+    // Store encrypted value in configuration
+    facades.Config().Add(key, encrypted)
+    
+    return encrypted, nil
+}
+
+// Decrypt configuration values
+func decryptConfigValue(key string) (string, error) {
+    encryptedValue := facades.Config().GetString(key)
+    if encryptedValue == "" {
+        return "", errors.New("configuration value not found")
+    }
+    
+    return facades.Crypt().DecryptString(encryptedValue)
+}
+```
+
+### File Encryption
+```go
+// Encrypt file contents
+func encryptFile(filePath string) (string, error) {
+    // Read file content
+    content, err := os.ReadFile(filePath)
+    if err != nil {
+        return "", err
+    }
+    
+    // Encrypt file content
+    return facades.Crypt().EncryptString(string(content))
+}
+
+// Decrypt file contents
+func decryptFile(encryptedContent string) ([]byte, error) {
+    // Decrypt content
+    decryptedContent, err := facades.Crypt().DecryptString(encryptedContent)
+    if err != nil {
+        return nil, err
+    }
+    
+    return []byte(decryptedContent), nil
+}
+```
+
+## Security Considerations
+
+### Key Management
+```go
+// Secure key rotation
+func rotateEncryptionKey() error {
+    // Generate new key
+    newKey := generateSecureKey()
+    
+    // Update configuration
+    facades.Config().Add("app.key", newKey)
+    
+    // Re-encrypt existing data with new key
+    return reencryptExistingData()
+}
+
+// Generate secure key
+func generateSecureKey() string {
+    key := make([]byte, 32)
+    if _, err := rand.Read(key); err != nil {
+        panic(err)
+    }
+    return "base64:" + base64.StdEncoding.EncodeToString(key)
+}
+```
+
+### Data Validation
+```go
+// Validate encrypted data
+func validateEncryptedData(encryptedData string) error {
+    if encryptedData == "" {
+        return errors.New("encrypted data cannot be empty")
+    }
+    
+    // Check if data is properly encrypted (starts with base64:)
+    if !strings.HasPrefix(encryptedData, "base64:") {
+        return errors.New("invalid encrypted data format")
+    }
+    
+    return nil
+}
+```
+
+### Error Handling
+```go
+// Secure error handling
+func secureDecrypt(encryptedData string) (string, error) {
+    // Validate input
+    if err := validateEncryptedData(encryptedData); err != nil {
+        return "", err
+    }
+    
+    // Attempt decryption
+    decryptedData, err := facades.Crypt().DecryptString(encryptedData)
+    if err != nil {
+        // Log error without exposing sensitive information
+        facades.Log().Error("Decryption failed", map[string]any{
+            "error": "decryption_failed",
+        })
+        return "", errors.New("failed to decrypt data")
+    }
+    
+    return decryptedData, nil
+}
+```
+
+## Performance Considerations
+
+### Caching Encrypted Data
+```go
+// Cache encrypted data
+func getCachedEncryptedData(key string) (string, error) {
+    // Try to get from cache first
+    cachedData := facades.Cache().Get(key, "")
+    if cachedData != "" {
+        return cachedData.(string), nil
+    }
+    
+    // Encrypt and cache
+    encryptedData, err := facades.Crypt().EncryptString("sensitive data")
+    if err != nil {
+        return "", err
+    }
+    
+    // Cache for 1 hour
+    facades.Cache().Put(key, encryptedData, time.Hour)
+    
+    return encryptedData, nil
+}
+```
+
+### Batch Encryption
+```go
+// Encrypt multiple values efficiently
+func encryptBatch(data []string) ([]string, error) {
+    encryptedData := make([]string, len(data))
+    
+    for i, value := range data {
+        encrypted, err := facades.Crypt().EncryptString(value)
+        if err != nil {
+            return nil, err
+        }
+        encryptedData[i] = encrypted
+    }
+    
+    return encryptedData, nil
+}
+```
+
+## Testing Encryption
+
+### Unit Testing
+```go
+// Test encryption functionality
+func TestEncryption(t *testing.T) {
+    // Test basic encryption/decryption
+    originalData := "test data"
+    
+    encrypted, err := facades.Crypt().EncryptString(originalData)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, encrypted)
+    
+    decrypted, err := facades.Crypt().DecryptString(encrypted)
+    assert.NoError(t, err)
+    assert.Equal(t, originalData, decrypted)
+}
+
+// Test encryption with different data types
+func TestEncryptionTypes(t *testing.T) {
+    testCases := []string{
+        "simple string",
+        "string with special chars: !@#$%^&*()",
+        "unicode string: 你好世界",
+        "json data: {\"key\": \"value\"}",
+    }
+    
+    for _, data := range testCases {
+        encrypted, err := facades.Crypt().EncryptString(data)
+        assert.NoError(t, err)
+        
+        decrypted, err := facades.Crypt().DecryptString(encrypted)
+        assert.NoError(t, err)
+        assert.Equal(t, data, decrypted)
+    }
+}
+```
+
+### Integration Testing
+```go
+// Test encryption in controller
+func TestEncryptionController(t *testing.T) {
+    // Test encrypting user data
+    userData := map[string]string{
+        "email": "test@example.com",
+        "phone": "+1234567890",
+    }
+    
+    // Encrypt data
+    encryptedData, err := encryptUserData(userData)
+    assert.NoError(t, err)
+    
+    // Decrypt data
+    decryptedData, err := decryptUserData(encryptedData)
+    assert.NoError(t, err)
+    assert.Equal(t, userData, decryptedData)
+}
+```
+
+## Encryption Best Practices
+
+### Design Principles
+- **Security First**: Always use encryption for sensitive data
+- **Key Management**: Implement secure key management practices
+- **Error Handling**: Handle encryption/decryption errors gracefully
+- **Performance**: Consider performance implications of encryption
+
+### Security Considerations
+- **Key Security**: Protect encryption keys at all costs
+- **Data Validation**: Validate encrypted data before processing
+- **Error Handling**: Don't expose sensitive information in errors
+- **Audit Logging**: Log encryption operations for security auditing
+
+### Performance Considerations
+- **Caching**: Cache encrypted data when appropriate
+- **Batch Operations**: Use batch operations for multiple encryptions
+- **Memory Management**: Consider memory usage for large data encryption
+- **Monitoring**: Monitor encryption performance
+
+## Development Guidelines
+
+### Encryption Organization
+- **Service Layer**: Use service layer for encryption logic
+- **Model Integration**: Integrate encryption with models when needed
+- **Configuration**: Store encryption keys securely in configuration
+- **Testing**: Test encryption functionality thoroughly
+
+### Monitoring and Maintenance
+- **Performance Metrics**: Monitor encryption performance
+- **Error Tracking**: Track encryption/decryption errors
+- **Security Events**: Monitor encryption-related security events
+- **Key Rotation**: Implement key rotation strategies
+
+## Best Practices
+
+### Encryption Design
+- **Consistent API**: Use consistent patterns for encryption
+- **Error Handling**: Handle all encryption errors gracefully
+- **Security**: Implement comprehensive security measures
+- **Documentation**: Document encryption usage and requirements
+
+### Security
+- **Key Protection**: Protect encryption keys securely
+- **Data Validation**: Validate all encrypted data
+- **Error Handling**: Handle encryption errors securely
+- **Audit Logging**: Log all encryption operations
+
+### Performance
+- **Efficient Operations**: Optimize encryption operations
+- **Caching**: Cache encrypted data when appropriate
+- **Batch Processing**: Use batch processing for multiple operations
+- **Monitoring**: Monitor encryption performance
+
+### Reliability
+- **Error Handling**: Handle all encryption errors
+- **Fallback Mechanisms**: Implement fallback mechanisms for encryption failures
+- **Testing**: Test encryption thoroughly
+- **Monitoring**: Monitor encryption system health

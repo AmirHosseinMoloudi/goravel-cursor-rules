@@ -1,0 +1,600 @@
+---
+alwaysApply: true
+---
+
+# Goravel ORM Relationships
+
+Based on the [official Goravel ORM relationships documentation](https://www.goravel.dev/orm/relationships.html).
+
+## Relationships Overview
+
+### Introduction
+- **Interconnected Tables**: Database tables are commonly interconnected (e.g., blog posts with comments, orders with users)
+- **ORM Simplification**: Goravel's ORM simplifies managing and dealing with relationships
+- **Relationship Types**: Supports One To One, One To Many, Many To Many, and Polymorphic relationships
+- **Automatic Conventions**: ORM automatically handles foreign keys and relationship conventions
+
+### Key Concepts
+- **Foreign Keys**: Automatic foreign key assignment based on parent model name
+- **Conventions**: Follows naming conventions for relationships and foreign keys
+- **Association Management**: Built-in methods for managing associations
+- **Eager Loading**: Prevents N+1 query problems with relationship loading
+
+## Defining Relationships
+
+### One To One Relationships
+
+#### Basic One To One
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Phone *Phone
+}
+
+type Phone struct {
+    orm.Model
+    UserID uint
+    Name   string
+}
+```
+
+#### Custom Foreign Key
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Phone *Phone `gorm:"foreignKey:UserName"`
+}
+
+type Phone struct {
+    orm.Model
+    UserName string
+    Name     string
+}
+```
+
+#### Custom References
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Phone *Phone `gorm:"foreignKey:UserName;references:name"`
+}
+
+type Phone struct {
+    orm.Model
+    UserName string
+    Name     string
+}
+```
+
+#### Inverse Relationship
+```go
+type User struct {
+    orm.Model
+    Name string
+}
+
+type Phone struct {
+    orm.Model
+    UserID uint
+    Name   string
+    User   *User
+}
+```
+
+### One To Many Relationships
+
+#### Basic One To Many
+```go
+type Post struct {
+    orm.Model
+    Name     string
+    Comments []*Comment
+}
+
+type Comment struct {
+    orm.Model
+    PostID uint
+    Name   string
+}
+```
+
+#### Inverse Relationship (Belongs To)
+```go
+type Post struct {
+    orm.Model
+    Name     string
+    Comments []*Comment
+}
+
+type Comment struct {
+    orm.Model
+    PostID uint
+    Name   string
+    Post   *Post
+}
+```
+
+### Many To Many Relationships
+
+#### Table Structure
+```sql
+-- Three tables needed for many-to-many
+users
+  id - integer
+  name - string
+
+roles
+  id - integer
+  name - string
+
+role_user
+  user_id - integer
+  role_id - integer
+```
+
+#### Basic Many To Many
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Roles []*Role `gorm:"many2many:role_user"`
+}
+
+type Role struct {
+    orm.Model
+    Name string
+}
+```
+
+#### Inverse Many To Many
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Roles []*Role `gorm:"many2many:role_user"`
+}
+
+type Role struct {
+    orm.Model
+    Name  string
+    Users []*User `gorm:"many2many:role_user"`
+}
+```
+
+#### Custom Intermediate Table
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Roles []*Role `gorm:"many2many:role_user;joinForeignKey:UserName;joinReferences:RoleName"`
+}
+
+type Role struct {
+    orm.Model
+    Name string
+}
+```
+
+#### Custom Table Structure
+```sql
+users
+  id - integer
+  name - string
+
+roles
+  id - integer
+  name - string
+
+role_user
+  user_name - integer
+  role_name - integer
+```
+
+### Polymorphic Relationships
+
+#### Table Structure
+```sql
+posts
+  id - integer
+  name - string
+
+videos
+  id - integer
+  name - string
+
+images
+  id - integer
+  url - string
+  imageable_id - integer
+  imageable_type - string
+
+comments
+  id - integer
+  body - text
+  commentable_id - integer
+  commentable_type - string
+```
+
+#### Model Structure
+```go
+type Post struct {
+    orm.Model
+    Name     string
+    Image    *Image    `gorm:"polymorphic:Imageable"`
+    Comments []*Comment `gorm:"polymorphic:Commentable"`
+}
+
+type Video struct {
+    orm.Model
+    Name     string
+    Image    *Image    `gorm:"polymorphic:Imageable"`
+    Comments []*Comment `gorm:"polymorphic:Commentable"`
+}
+
+type Image struct {
+    orm.Model
+    Name          string
+    ImageableID   uint
+    ImageableType string
+}
+
+type Comment struct {
+    orm.Model
+    Name            string
+    CommentableID   uint
+    CommentableType string
+}
+```
+
+#### Custom Polymorphic Value
+```go
+type Post struct {
+    orm.Model
+    Name  string
+    Image *Image `gorm:"polymorphic:Imageable;polymorphicValue:master"`
+}
+```
+
+## Querying Associations
+
+### Create or Update Associations
+
+#### Select Associations
+```go
+user := models.User{Name: "user", Posts: []*models.Post{{Name: "post"}}}
+
+// Create all child associations while creating User
+facades.Orm().Query().Select(orm.Associations).Create(&user)
+
+// Only create Post while creating User
+facades.Orm().Query().Select("Name", "Posts").Create(&user)
+
+// When creating a User, ignore the Post, but create all other child associations
+facades.Orm().Query().Omit("Posts").Create(&user)
+
+// When creating User, ignore Name field, but create all child associations
+facades.Orm().Query().Omit("Name").Create(&user)
+
+// When creating User, ignore Name field and all child associations
+facades.Orm().Query().Omit("Name", orm.Associations).Create(&user)
+```
+
+### Find Associations
+```go
+// Find all matching related records
+var posts []models.Post
+facades.Orm().Query().Model(&user).Association("Posts").Find(&posts)
+
+// Find associations with conditions
+facades.Orm().Query().Model(&user).Where("name = ?", "goravel").Order("id desc").Association("Posts").Find(&posts)
+```
+
+### Append Associations
+```go
+// Append new associations for Many To Many, One To Many
+facades.Orm().Query().Model(&user).Association("Posts").Append([]*models.Post{Post1, Post2})
+
+// Append single association
+facades.Orm().Query().Model(&user).Association("Posts").Append(&models.Post{Name: "goravel"})
+```
+
+### Replace Associations
+```go
+// Replace current associations with new ones
+facades.Orm().Query().Model(&user).Association("Posts").Replace([]*models.Post{Post1, Post2})
+
+// Replace with single association
+facades.Orm().Query().Model(&user).Association("Posts").Replace(models.Post{Name: "goravel"}, Post2)
+```
+
+### Delete Associations
+```go
+// Remove relationship between source & arguments
+facades.Orm().Query().Model(&user).Association("Posts").Delete([]*models.Post{Post1, Post2})
+
+// Delete single association
+facades.Orm().Query().Model(&user).Association("Posts").Delete(Post1, Post2)
+```
+
+### Clear Associations
+```go
+// Remove all references between source & association
+facades.Orm().Query().Model(&user).Association("Posts").Clear()
+```
+
+### Count Associations
+```go
+// Return count of current associations
+facades.Orm().Query().Model(&user).Association("Posts").Count()
+
+// Count with conditions
+facades.Orm().Query().Model(&user).Where("name = ?", "goravel").Association("Posts").Count()
+```
+
+### Batch Data Operations
+```go
+// Find all roles for all users
+facades.Orm().Query().Model(&users).Association("Posts").Find(&posts)
+
+// Delete User A from all user's Posts
+facades.Orm().Query().Model(&users).Association("Posts").Delete(&userA)
+
+// Get distinct count of all users' Posts
+facades.Orm().Query().Model(&users).Association("Posts").Count()
+
+// Batch append with multiple users
+var users = []models.User{user1, user2, user3}
+facades.Orm().Query().Model(&users).Association("Team").Append(&userA, &userB, &[]models.User{userA, userB, userC})
+
+// Batch replace with multiple users
+facades.Orm().Query().Model(&users).Association("Team").Replace(&userA, &userB, &[]models.User{userA, userB, userC})
+```
+
+## Eager Loading
+
+### Basic Eager Loading
+```go
+type Author struct {
+    orm.Model
+    Name string
+}
+
+type Book struct {
+    orm.Model
+    AuthorID uint
+    Name     string
+    Author   *Author
+}
+
+// N+1 Query Problem Example
+var books models.Book
+facades.Orm().Query().Find(&books)
+
+for _, book := range books {
+    var author models.Author
+    facades.Orm().Query().Find(&author, book.AuthorID)
+}
+
+// Eager Loading Solution
+var books models.Book
+facades.Orm().Query().With("Author").Find(&books)
+
+for _, book := range books {
+    fmt.Println(book.Author)
+}
+```
+
+### Eager Loading Multiple Relationships
+```go
+// Load multiple relationships
+var book models.Book
+facades.Orm().Query().With("Author").With("Publisher").Find(&book)
+```
+
+### Nested Eager Loading
+```go
+// Eager load relationship's relationships using dot syntax
+var book models.Book
+facades.Orm().Query().With("Author.Contacts").Find(&book)
+```
+
+### Constraining Eager Loads
+```go
+import "github.com/goravel/framework/contracts/database/orm"
+
+// Constrain eager loads with conditions
+var book models.Book
+facades.Orm().Query().With("Author", "name = ?", "author").Find(&book)
+
+// Constrain with function
+facades.Orm().Query().With("Author", func(query orm.Query) orm.Query {
+    return query.Where("name = ?", "author")
+}).Find(&book)
+```
+
+### Lazy Eager Loading
+```go
+// Load relationships after parent model is retrieved
+var books models.Book
+facades.Orm().Query().Find(&books)
+
+for _, book := range books {
+    if someCondition {
+        err := facades.Orm().Query().Load(&book, "Author")
+    }
+}
+
+// Load with constraints
+var book models.Book
+facades.Orm().Query().Load(&book, "Author", "name = ?", "author").Find(&book)
+
+facades.Orm().Query().Load(&book, "Author", func(query orm.Query) orm.Query {
+    return query.Where("name = ?", "author")
+}).Find(&book)
+
+// Load only if not already loaded
+facades.Orm().Query().LoadMissing(&book, "Author")
+```
+
+## Advanced Relationship Patterns
+
+### Complex One To Many
+```go
+type User struct {
+    orm.Model
+    Name     string
+    Posts    []*Post
+    Comments []*Comment
+}
+
+type Post struct {
+    orm.Model
+    UserID    uint
+    Title     string
+    Content   string
+    User      *User
+    Comments  []*Comment
+}
+
+type Comment struct {
+    orm.Model
+    UserID uint
+    PostID uint
+    Content string
+    User    *User
+    Post    *Post
+}
+```
+
+### Complex Many To Many
+```go
+type User struct {
+    orm.Model
+    Name  string
+    Roles []*Role `gorm:"many2many:user_roles"`
+}
+
+type Role struct {
+    orm.Model
+    Name        string
+    Users       []*User       `gorm:"many2many:user_roles"`
+    Permissions []*Permission `gorm:"many2many:role_permissions"`
+}
+
+type Permission struct {
+    orm.Model
+    Name  string
+    Roles []*Role `gorm:"many2many:role_permissions"`
+}
+```
+
+### Polymorphic with Multiple Types
+```go
+type Post struct {
+    orm.Model
+    Title     string
+    Content   string
+    Images    []*Image    `gorm:"polymorphic:Imageable"`
+    Comments  []*Comment  `gorm:"polymorphic:Commentable"`
+    Tags      []*Tag      `gorm:"polymorphic:Taggable"`
+}
+
+type Video struct {
+    orm.Model
+    Title     string
+    URL       string
+    Images    []*Image    `gorm:"polymorphic:Imageable"`
+    Comments  []*Comment  `gorm:"polymorphic:Commentable"`
+    Tags      []*Tag      `gorm:"polymorphic:Taggable"`
+}
+
+type Image struct {
+    orm.Model
+    URL          string
+    ImageableID  uint
+    ImageableType string
+}
+
+type Comment struct {
+    orm.Model
+    Content        string
+    CommentableID  uint
+    CommentableType string
+}
+
+type Tag struct {
+    orm.Model
+    Name        string
+    TaggableID  uint
+    TaggableType string
+}
+```
+
+## Relationship Best Practices
+
+### Design Principles
+- **Clear Relationships**: Define clear, logical relationships between models
+- **Naming Conventions**: Follow consistent naming conventions for foreign keys and relationships
+- **Performance**: Use eager loading to avoid N+1 query problems
+- **Data Integrity**: Maintain referential integrity through proper foreign key constraints
+
+### Performance Considerations
+- **Eager Loading**: Always use eager loading for relationships to prevent N+1 queries
+- **Selective Loading**: Load only necessary relationships to optimize performance
+- **Batch Operations**: Use batch operations for multiple model associations
+- **Query Optimization**: Optimize relationship queries for better performance
+
+### Security Considerations
+- **Access Control**: Implement proper access control for relationship operations
+- **Data Validation**: Validate relationship data before operations
+- **Input Sanitization**: Sanitize inputs for relationship operations
+- **Audit Logging**: Log relationship operations for security auditing
+
+## Development Guidelines
+
+### Relationship Organization
+- **Logical Grouping**: Group related models together
+- **Clear Dependencies**: Define clear model dependencies
+- **Documentation**: Document relationship purposes and constraints
+- **Testing**: Test relationship operations thoroughly
+
+### Query Optimization
+- **Eager Loading**: Use eager loading for all relationship queries
+- **Selective Fields**: Select only necessary fields in relationship queries
+- **Index Usage**: Create appropriate indexes for foreign keys
+- **Performance Monitoring**: Monitor relationship query performance
+
+### Error Handling
+- **Relationship Errors**: Handle relationship-specific errors gracefully
+- **Validation**: Validate relationship data before operations
+- **Rollback**: Use transactions for relationship operations
+- **Logging**: Log relationship errors appropriately
+
+## Best Practices
+
+### Relationship Design
+- **Consistent Patterns**: Use consistent patterns for all relationships
+- **Clear Naming**: Use clear, descriptive names for relationships
+- **Documentation**: Document relationship purposes and usage
+- **Testing**: Test all relationship operations
+
+### Performance
+- **Efficient Queries**: Write efficient relationship queries
+- **Eager Loading**: Always use eager loading for relationships
+- **Batch Operations**: Use batch operations when possible
+- **Monitoring**: Monitor relationship performance
+
+### Security
+- **Access Control**: Implement proper access control for relationships
+- **Data Validation**: Validate all relationship data
+- **Input Sanitization**: Sanitize relationship inputs
+- **Audit Logging**: Log relationship operations
+
+### Reliability
+- **Error Handling**: Handle all relationship errors gracefully
+- **Data Consistency**: Maintain data consistency in relationships
+- **Testing**: Test relationship functionality thoroughly
+- **Monitoring**: Monitor relationship system health

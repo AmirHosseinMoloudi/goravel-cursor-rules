@@ -1,0 +1,269 @@
+---
+alwaysApply: true
+---
+
+# Goravel Service Container & Dependency Injection
+
+Based on the [official Goravel service container documentation](https://www.goravel.dev/architecture-concepts/service-container.html).
+
+## Service Container Overview
+
+### Introduction
+- **Powerful Tool**: Manages class dependencies and performs dependency injection
+- **Framework Integration**: Contains all Goravel modules
+- **Service Binding**: Allows binding custom services to container
+- **Third-party Support**: Provides support for third-party packages
+
+### Key Concepts
+- **Dependency Injection**: Automatic resolution of class dependencies
+- **Service Binding**: Registering services with the container
+- **Service Resolution**: Retrieving services from the container
+- **Lifecycle Management**: Managing service instances and their lifecycle
+
+## Service Binding
+
+### Simple Bindings
+```go
+// Within Service Provider
+func (route *ServiceProvider) Register(app foundation.Application) {
+    app.Bind(Binding, func(app foundation.Application) (any, error) {
+        return NewRoute(app.MakeConfig()), nil
+    })
+}
+
+// Outside Service Provider using Facade
+facades.App().Bind("key", func(app foundation.Application) (any, error) {
+    // Service implementation
+    return NewService(), nil
+})
+```
+
+### Binding A Singleton
+```go
+// Singleton binding - resolved only once
+app.Singleton(key, func(app foundation.Application) (any, error) {
+    return NewGin(app.MakeConfig()), nil
+})
+```
+
+### Binding Instances
+```go
+// Bind existing instance
+app.Instance(key, instance)
+```
+
+### Binding With Parameters
+```go
+// Binding with extra parameters
+app.BindWith(Binding, func(app foundation.Application, parameters map[string]any) (any, error) {
+    return NewRoute(app.MakeConfig()), nil
+})
+```
+
+## Service Resolution
+
+### The Make Method
+```go
+// Resolve service from container
+instance, err := app.Make(key)
+
+// Using Facade outside Service Provider
+instance, err := facades.App().Make(key)
+```
+
+### The MakeWith Method
+```go
+// Resolve with parameters
+instance, err := app.MakeWith(key, map[string]any{"id": 1})
+```
+
+### Convenient Methods
+```go
+// Framework-provided convenience methods
+app.MakeArtisan()    // Artisan facade
+app.MakeAuth()       // Authentication
+app.MakeCache()      // Cache facade
+app.MakeConfig()      // Configuration
+app.MakeCrypt()       // Encryption
+app.MakeEvent()      // Event system
+app.MakeGate()        // Authorization
+app.MakeGrpc()        // gRPC services
+app.MakeHash()        // Hashing
+app.MakeLog()         // Logging
+app.MakeMail()        // Mail services
+app.MakeOrm()         // ORM
+app.MakeQueue()       // Queue system
+app.MakeRateLimiter() // Rate limiting
+app.MakeRoute()       // Routing
+app.MakeSchedule()    // Task scheduling
+app.MakeStorage()      // File storage
+app.MakeValidation()  // Validation
+```
+
+## Service Provider Integration
+
+### Service Provider Structure
+```go
+type ServiceProvider struct {
+}
+
+func (sp *ServiceProvider) Register(app foundation.Application) {
+    // Register services here
+    app.Bind("service.key", func(app foundation.Application) (any, error) {
+        return NewService(), nil
+    })
+}
+
+func (sp *ServiceProvider) Boot(app foundation.Application) {
+    // Boot services here
+}
+```
+
+For detailed service provider patterns and best practices, see the [Goravel Service Providers Guide](mdc:.cursor/rules/goravel-service-providers.mdc).
+
+### Service Registration Best Practices
+- **Register in `Register()` method**: Bind services during registration phase
+- **Boot in `Boot()` method**: Initialize services after all providers are registered
+- **Use interfaces**: Define service contracts with interfaces
+- **Error handling**: Always handle errors in service creation
+
+## Dependency Injection Patterns
+
+### Constructor Injection
+```go
+// Service with dependencies
+type UserService struct {
+    userRepo UserRepository
+    logger   Logger
+}
+
+func NewUserService(userRepo UserRepository, logger Logger) *UserService {
+    return &UserService{
+        userRepo: userRepo,
+        logger:   logger,
+    }
+}
+```
+
+### Interface-based Design
+```go
+// Define service interface
+type UserRepository interface {
+    FindByID(id int) (*User, error)
+    Create(user *User) error
+}
+
+// Implement interface
+type DatabaseUserRepository struct {
+    db *sql.DB
+}
+
+func (r *DatabaseUserRepository) FindByID(id int) (*User, error) {
+    // Implementation
+}
+```
+
+### Service Resolution in Controllers
+```go
+// Controller with injected services
+type UserController struct {
+    userService UserService
+}
+
+func NewUserController(userService UserService) *UserController {
+    return &UserController{
+        userService: userService,
+    }
+}
+```
+
+## Best Practices
+
+### Service Design
+- **Single Responsibility**: Each service should have one responsibility
+- **Interface Segregation**: Use small, focused interfaces
+- **Dependency Inversion**: Depend on abstractions, not concretions
+- **Error Handling**: Always handle errors properly
+
+### Container Usage
+- **Register services in providers**: Use service providers for registration
+- **Use facades for resolution**: Use facades when outside service providers
+- **Manage lifecycle**: Understand singleton vs transient services
+- **Parameter injection**: Use `BindWith` and `MakeWith` for parameterized services
+
+### Testing
+- **Mock services**: Use interfaces for easy mocking
+- **Test service resolution**: Test that services resolve correctly
+- **Integration testing**: Test service interactions
+- **Service isolation**: Test services in isolation
+
+## Development Guidelines
+
+### Service Organization
+- **Group related services**: Organize services by domain
+- **Use consistent naming**: Follow naming conventions
+- **Document services**: Document service interfaces and implementations
+- **Version services**: Consider service versioning for APIs
+
+### Performance Considerations
+- **Singleton usage**: Use singletons for expensive services
+- **Lazy loading**: Services are resolved on-demand
+- **Memory management**: Be aware of service lifecycle
+- **Resource cleanup**: Implement proper cleanup for services
+
+### Security Considerations
+- **Service isolation**: Isolate services properly
+- **Input validation**: Validate parameters in service methods
+- **Access control**: Implement proper access control
+- **Audit logging**: Log service usage for security
+
+## Common Patterns
+
+### Repository Pattern
+```go
+// Repository interface
+type UserRepository interface {
+    FindByID(id int) (*User, error)
+    Create(user *User) error
+}
+
+// Service using repository
+type UserService struct {
+    repo UserRepository
+}
+```
+
+### Factory Pattern
+```go
+// Factory service
+type ServiceFactory struct {
+    app foundation.Application
+}
+
+func (f *ServiceFactory) CreateUserService() UserService {
+    return NewUserService(f.app.Make("user.repository"))
+}
+```
+
+### Observer Pattern
+```go
+// Event service
+type EventService struct {
+    listeners []EventListener
+}
+
+func (e *EventService) Notify(event Event) {
+    for _, listener := range e.listeners {
+        listener.Handle(event)
+    }
+}
+```
+
+## Framework Integration
+- **Service Providers**: Register services in [app/providers/](mdc:app/providers/)
+- **Configuration**: Use configuration for service settings
+- **Logging**: Integrate with framework logging
+- **Testing**: Use framework testing utilities
+- **Facades**: Use facades for static access to framework services
+
+For detailed facade usage and patterns, see the [Goravel Facades Guide](mdc:.cursor/rules/goravel-facades.mdc).

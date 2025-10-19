@@ -1,0 +1,754 @@
+---
+alwaysApply: true
+---
+
+# Goravel Strings System
+
+Based on the [official Goravel strings documentation](https://www.goravel.dev/digging-deeper/strings.html).
+
+## Strings Overview
+
+### Introduction
+- **Fluent String Manipulation**: Goravel provides a fluent string manipulation library for easy string operations
+- **Method Chaining**: Combine multiple string operations through method chaining
+- **Fluent Interface**: Most methods return `support/str.String` instances for chaining
+- **Final String Value**: Call `String()` method to get the underlying string value
+
+### Key Concepts
+- **String Package**: Access string functionality through `github.com/goravel/framework/support/str`
+- **Fluent Interface**: Chain multiple operations together
+- **Method Chaining**: Each method returns a new String instance
+- **Final Conversion**: Use `String()` to get the final string value
+
+## Basic String Operations
+
+### Creating String Instances
+```go
+import "github.com/goravel/framework/support/str"
+
+// Create fluent string instance
+str.Of("Goravel")
+
+// Basic chaining example
+result := str.Of("  Goravel  ").Trim().Lower().UcFirst().String() // "Goravel"
+```
+
+### String Extraction Methods
+
+#### `After` - Extract After Value
+```go
+// Extract portion after specified value
+str.Of("Hello World!").After("Hello").String() // " World!"
+```
+
+#### `AfterLast` - Extract After Last Occurrence
+```go
+// Extract portion after last occurrence
+str.Of("docs.goravel.dev").AfterLast(".").String() // "dev"
+```
+
+#### `Before` - Extract Before Value
+```go
+// Extract portion before specified value
+str.Of("Hello World!").Before("World").String() // "Hello "
+```
+
+#### `BeforeLast` - Extract Before Last Occurrence
+```go
+// Extract portion before last occurrence
+str.Of("docs.goravel.dev").BeforeLast(".").String() // "docs.goravel"
+```
+
+#### `Between` - Extract Between Values
+```go
+// Extract portion between two values
+str.Of("[Hello] World!").Between("[", "]").String() // "Hello"
+```
+
+#### `BetweenFirst` - Extract Between First Occurrence
+```go
+// Extract portion between first occurrence of two values
+str.Of("[Hello] [World]!").BetweenFirst("[", "]").String() // "Hello"
+```
+
+### String Modification Methods
+
+#### `Append` - Add to End
+```go
+// Append value to end of string
+str.Of("Bowen").Append(" Han").String() // "Bowen Han"
+```
+
+#### `Prepend` - Add to Beginning
+```go
+// Prepend value to beginning of string
+str.Of("Framework").Prepend("Goravel ").String() // "Goravel Framework"
+```
+
+#### `Remove` - Remove Values
+```go
+// Remove specified values
+str.Of("Hello World").Remove("World").String() // "Hello "
+str.Of("Hello World").Remove("World", "Hello").String() // " "
+```
+
+#### `Replace` - Replace Values
+```go
+// Replace values in string
+str.Of("Hello World").Replace("World", "Krishan").String() // "Hello Krishan"
+
+// Case-insensitive replace
+str.Of("Hello World").Replace("world", "Krishan", false).String() // "Hello Krishan"
+```
+
+#### `ReplaceFirst` - Replace First Occurrence
+```go
+// Replace first occurrence
+str.Of("Hello World").ReplaceFirst("World", "Goravel").String() // "Hello Goravel"
+```
+
+#### `ReplaceLast` - Replace Last Occurrence
+```go
+// Replace last occurrence
+str.Of("Hello World").ReplaceLast("World", "Goravel").String() // "Hello Goravel"
+```
+
+#### `ReplaceStart` - Replace at Start
+```go
+// Replace only if at start
+str.Of("Hello World").ReplaceStart("Hello", "Goravel").String() // "Goravel World"
+str.Of("Hello World").ReplaceStart("World", "Goravel").String() // "Hello World"
+```
+
+#### `ReplaceEnd` - Replace at End
+```go
+// Replace only if at end
+str.Of("Hello World").ReplaceEnd("World", "Goravel").String() // "Hello Goravel"
+str.Of("Hello World").ReplaceEnd("Hello", "Goravel").String() // "Hello World"
+```
+
+#### `ReplaceMatches` - Replace Regex Matches
+```go
+// Replace regex matches
+str.Of("Hello, Goravel!").ReplaceMatches(`goravel!(.*)`, "Krishan").String() // "Hello, Krishan!"
+```
+
+### String Trimming and Padding
+
+#### `Trim` - Trim Whitespace
+```go
+// Trim whitespace
+str.Of("  Goravel  ").Trim().String() // "Goravel"
+
+// Trim specific characters
+str.Of("/framework/").Trim("/").String() // "framework"
+```
+
+#### `LTrim` - Trim Left Side
+```go
+// Trim left side
+str.Of("  Goravel  ").LTrim().String() // "Goravel  "
+str.Of("/framework/").LTrim("/").String() // "framework/"
+```
+
+#### `RTrim` - Trim Right Side
+```go
+// Trim right side
+str.Of("  Goravel  ").RTrim().String() // "  Goravel"
+str.Of("/framework/").RTrim("/").String() // "/framework"
+```
+
+#### `PadLeft` - Pad Left Side
+```go
+// Pad left side
+str.Of("Hello").PadLeft(10, "_").String() // "_____Hello"
+```
+
+#### `PadRight` - Pad Right Side
+```go
+// Pad right side
+str.Of("Hello").PadRight(10, "_").String() // "Hello_____"
+```
+
+#### `PadBoth` - Pad Both Sides
+```go
+// Pad both sides
+str.Of("Hello").PadBoth(10, "_").String() // "__Hello___"
+```
+
+### String Case Conversion
+
+#### `Lower` - Convert to Lowercase
+```go
+// Convert to lowercase
+str.Of("GORAVEL").Lower().String() // "goravel"
+```
+
+#### `Upper` - Convert to Uppercase
+```go
+// Convert to uppercase
+str.Of("goravel").Upper().String() // "GORAVEL"
+```
+
+#### `Title` - Convert to Title Case
+```go
+// Convert to title case
+str.Of("goravel framework").Title().String() // "Goravel Framework"
+```
+
+#### `Camel` - Convert to camelCase
+```go
+// Convert to camelCase
+str.Of("hello_world").Camel().String() // "helloWorld"
+```
+
+#### `Snake` - Convert to snake_case
+```go
+// Convert to snake_case
+str.Of("GoravelFramework").Snake().String() // "goravel_framework"
+```
+
+#### `Kebab` - Convert to kebab-case
+```go
+// Convert to kebab-case
+str.Of("GoravelFramework").Kebab().String() // "goravel-framework"
+```
+
+#### `Studly` - Convert to StudlyCase
+```go
+// Convert to StudlyCase
+str.Of("goravel_framework").Studly().String() // "GoravelFramework"
+```
+
+#### `UcFirst` - Uppercase First Character
+```go
+// Uppercase first character
+str.Of("goravel framework").UcFirst().String() // "Goravel framework"
+```
+
+#### `LcFirst` - Lowercase First Character
+```go
+// Lowercase first character
+str.Of("Goravel Framework").LcFirst().String() // "goravel Framework"
+```
+
+### String Validation Methods
+
+#### `Contains` - Check if Contains Value
+```go
+// Check if string contains value
+str.Of("Goravel").Contains("Gor") // true
+str.Of("Hello World").Contains("Gor", "Hello") // true
+```
+
+#### `ContainsAll` - Check if Contains All Values
+```go
+// Check if string contains all values
+str.Of("Hello World").ContainsAll("Hello", "World") // true
+str.Of("Hello World").ContainsAll("Hello", "Gor") // false
+```
+
+#### `StartsWith` - Check if Starts With
+```go
+// Check if string starts with value
+str.Of("Goravel").StartsWith("Gor") // true
+str.Of("Hello World").StartsWith("Gor", "Hello") // true
+```
+
+#### `EndsWith` - Check if Ends With
+```go
+// Check if string ends with value
+str.Of("Goravel").EndsWith("vel") // true
+str.Of("Goravel").EndsWith("vel", "lie") // true
+```
+
+#### `Exactly` - Check if Exactly Equal
+```go
+// Check if string is exactly equal
+str.Of("Goravel").Exactly("Goravel") // true
+```
+
+#### `IsEmpty` - Check if Empty
+```go
+// Check if string is empty
+str.Of("").IsEmpty() // true
+```
+
+#### `IsNotEmpty` - Check if Not Empty
+```go
+// Check if string is not empty
+str.Of("Goravel").IsNotEmpty() // true
+```
+
+#### `IsAscii` - Check if ASCII
+```go
+// Check if string contains only ASCII characters
+str.Of("Goravel").IsAscii() // true
+str.Of("你好").IsAscii() // false
+```
+
+#### `IsUlid` - Check if ULID
+```go
+// Check if string is ULID
+str.Of("01E5Z6Z1Z6Z1Z6Z1Z6Z1Z6Z1Z6").IsUlid() // true
+str.Of("krishan").IsUlid() // false
+```
+
+#### `IsUuid` - Check if UUID
+```go
+// Check if string is UUID
+str.Of("550e8400-e29b-41d4-a716-446655440000").IsUuid() // true
+str.Of("krishan").IsUuid() // false
+```
+
+#### `IsSlice` - Check if Slice
+```go
+// Check if string is slice
+str.Of(`[{"name": "John"}, {"name": "Alice"}]`).IsSlice() // true
+str.Of(`{"name": "John"}`).IsSlice() // false
+```
+
+#### `IsMap` - Check if Map
+```go
+// Check if string is map
+str.Of(`{"name": "John"}`).IsMap() // true
+str.Of(`[{"name": "John"}, {"name": "Alice"}]`).IsMap() // false
+```
+
+### String Utility Methods
+
+#### `Length` - Get String Length
+```go
+// Get string length
+str.Of("Goravel").Length() // 7
+```
+
+#### `CharAt` - Get Character at Index
+```go
+// Get character at index
+str.Of("Goravel").CharAt(1) // "o"
+```
+
+#### `Substr` - Extract Substring
+```go
+// Extract substring
+str.Of("Goravel").Substr(1, 3) // "ora"
+```
+
+#### `Limit` - Truncate String
+```go
+// Truncate string
+str.Of("This is a beautiful morning").Limit(7).String() // "This is..."
+str.Of("This is a beautiful morning").Limit(7, " (****)").String() // "This is (****)"
+```
+
+#### `Words` - Limit Words
+```go
+// Limit number of words
+str.Of("Hello, World!").Words(1) // "Hello..."
+str.Of("Hello, World!").Words(1, " (****)") // "Hello (****)"
+```
+
+#### `WordCount` - Count Words
+```go
+// Count words in string
+str.Of("Hello, World!").WordCount() // 2
+```
+
+### String Path Methods
+
+#### `Basename` - Get Basename
+```go
+// Get basename from path
+str.Of("framework/support/str").Basename().String() // "str"
+str.Of("framework/support/str.go").Basename(".go").String() // "str"
+```
+
+#### `Dirname` - Get Directory Name
+```go
+// Get directory name
+str.Of("framework/support/str").Dirname().String() // "framework/support"
+str.Of("framework/support/str").Dirname(2).String() // "framework"
+```
+
+### String Splitting and Joining
+
+#### `Explode` - Split String
+```go
+// Split string by delimiter
+str.Of("Hello World").Explode(" ") // []string{"Hello", "World"}
+```
+
+#### `Split` - Split String
+```go
+// Split string by delimiter
+str.Of("Hello World").Split(" ") // []string{"Hello", "World"}
+```
+
+#### `UcSplit` - Split by Uppercase
+```go
+// Split by uppercase characters
+str.Of("GoravelFramework").UcSplit() // []string{"Goravel", "Framework"}
+```
+
+### String Formatting Methods
+
+#### `Finish` - Ensure Ends With
+```go
+// Ensure string ends with value
+str.Of("framework").Finish("/").String() // "framework/"
+str.Of("framework/").Finish("/").String() // "framework/"
+```
+
+#### `Start` - Ensure Starts With
+```go
+// Ensure string starts with value
+str.Of("framework").Start("/").String() // "/framework"
+str.Of("/framework").Start("/").String() // "/framework"
+```
+
+#### `Squish` - Remove Extra Whitespace
+```go
+// Remove consecutive whitespace
+str.Of("Hello    World").Squish().String() // "Hello World"
+```
+
+#### `Headline` - Convert to Headline
+```go
+// Convert to headline
+str.Of("bowen_han").Headline().String() // "Bowen Han"
+str.Of("HelloWorld").Headline().String() // "Hello World"
+```
+
+### String Masking and Security
+
+#### `Mask` - Mask String
+```go
+// Mask string with character
+str.Of("krishan@email.com").Mask("*", 3).String() // "kri**************"
+
+// Mask from end
+str.Of("krishan@email.com").Mask("*", -13, 3).String() // "kris***@email.com"
+str.Of("krishan@email.com").Mask("*", -13).String() // "kris**************"
+```
+
+### String Regular Expression Methods
+
+#### `Match` - Match Regex
+```go
+// Match regular expression
+str.Of("This is a (test) string").Match(`\([^)]+\)`).String() // "(test)"
+```
+
+#### `MatchAll` - Match All Regex
+```go
+// Match all regular expressions
+str.Of("abc123def456def").MatchAll(`\d+`) // []string{"123", "456"}
+```
+
+#### `IsMatch` - Test Regex Match
+```go
+// Test if string matches regex
+str.Of("Hello, Goravel!").IsMatch(`(?i)goravel`, `goravel!(.*)`) // true
+```
+
+#### `Test` - Test Regex
+```go
+// Test if string matches regex
+str.Of("Hello, Goravel!").Test(`goravel!(.*)`) // true
+```
+
+### String Conditional Methods
+
+#### `When` - Conditional Processing
+```go
+// Process string if condition is true
+str.Of("Bowen").When(true, func(s *str.String) *str.String {
+    return s.Append(" Han")
+}).String() // "Bowen Han"
+```
+
+#### `Unless` - Conditional Processing (Inverse)
+```go
+// Process string if condition is false
+str.Of("Goravel").Unless(func(s *str.String) bool {
+    return false
+}, func(s *str.String) *str.String {
+    return str.Of("Fallback Applied")
+}).String() // "Fallback Applied"
+```
+
+#### `WhenContains` - Process if Contains
+```go
+// Process if string contains value
+str.Of("Hello Bowen").WhenContains("Hello", func(s *str.String) *str.String {
+    return s.Append(" Han")
+}).String() // "Hello Bowen Han"
+```
+
+#### `WhenContainsAll` - Process if Contains All
+```go
+// Process if string contains all values
+str.Of("Hello Bowen").WhenContainsAll([]string{"Hello", "Bowen"}, func(s *str.String) *str.String {
+    return s.Append(" Han")
+}).String() // "Hello Bowen Han"
+```
+
+#### `WhenEmpty` - Process if Empty
+```go
+// Process if string is empty
+str.Of("").WhenEmpty(func(s *str.String) *str.String {
+    return s.Append("Goravel")
+}).String() // "Goravel"
+```
+
+#### `WhenNotEmpty` - Process if Not Empty
+```go
+// Process if string is not empty
+str.Of("Goravel").WhenNotEmpty(func(s *str.String) *str.String {
+    return s.Append(" Framework")
+}).String() // "Goravel Framework"
+```
+
+#### `WhenStartsWith` - Process if Starts With
+```go
+// Process if string starts with value
+str.Of("hello world").WhenStartsWith("hello", func(s *str.String) *str.String {
+    return s.Title()
+}).String() // "Hello World"
+```
+
+#### `WhenEndsWith` - Process if Ends With
+```go
+// Process if string ends with value
+str.Of("hello world").WhenEndsWith("world", func(s *str.String) *str.String {
+    return s.Title()
+}).String() // "Hello World"
+```
+
+#### `WhenExactly` - Process if Exactly Equal
+```go
+// Process if string is exactly equal
+str.Of("Goravel").WhenExactly("Goravel", func(s *str.String) *str.String {
+    return s.Append(" Framework")
+}).String() // "Goravel Framework"
+```
+
+#### `WhenNotExactly` - Process if Not Exactly Equal
+```go
+// Process if string is not exactly equal
+str.Of("Goravel").WhenNotExactly("Goravel", func(s *str.String) *str.String {
+    return s.Append(" Framework")
+}).String() // "Goravel"
+```
+
+#### `WhenIs` - Process if Matches Pattern
+```go
+// Process if string matches pattern
+str.Of("foo/bar").WhenIs("foo/*", func(s *str.String) *str.String {
+    return s.Append("/baz")
+}).String() // "foo/bar/baz"
+```
+
+#### `WhenIsUlid` - Process if ULID
+```go
+// Process if string is ULID
+str.Of("01E5Z6Z1Z6Z1Z6Z1Z6Z1Z6Z1Z6").WhenIsUlid(func(s *str.String) *str.String {
+    return s.Substr(0, 10)
+}).String() // "01E5Z6Z1Z6"
+```
+
+#### `WhenIsUuid` - Process if UUID
+```go
+// Process if string is UUID
+str.Of("550e8400-e29b-41d4-a716-446655440000").WhenIsUuid(func(s *str.String) *str.String {
+    return s.Substr(0, 8)
+}).String() // "550e8400"
+```
+
+#### `WhenTest` - Process if Matches Regex
+```go
+// Process if string matches regex
+str.Of("goravel framework").WhenTest(`goravel(.*)`, func(s *str.String) *str.String {
+    return s.Append(" is awesome")
+}).String() // "goravel framework is awesome"
+```
+
+### String Utility Methods
+
+#### `Repeat` - Repeat String
+```go
+// Repeat string
+str.Of("a").Repeat(2).String() // "aa"
+```
+
+#### `Swap` - Swap Values
+```go
+// Swap multiple values
+str.Of("Golang is awesome").Swap(map[string]string{
+    "Golang":  "Go",
+    "awesome": "excellent",
+}).String() // "Go is excellent"
+```
+
+#### `Tap` - Tap for Side Effects
+```go
+// Tap for side effects
+str.Of("Goravel").Tap(func(s string) {
+    fmt.Println(s)
+}).String() // "Goravel"
+```
+
+#### `Pipe` - Transform with Function
+```go
+// Transform with function
+str.Of("Goravel").Pipe(func(s string) string {
+    return s + " Framework"
+}).String() // "Goravel Framework"
+```
+
+#### `NewLine` - Add Newlines
+```go
+// Add newlines
+str.Of("Goravel").NewLine(2).Append("Framework").String() // "Goravel\n\nFramework"
+```
+
+## Advanced String Patterns
+
+### String Processing Pipeline
+```go
+// Complex string processing pipeline
+func processUserInput(input string) string {
+    return str.Of(input).
+        Trim().
+        Squish().
+        Title().
+        When(func(s *str.String) bool {
+            return s.Length() > 50
+        }, func(s *str.String) *str.String {
+            return s.Limit(50, "...")
+        }).
+        String()
+}
+```
+
+### String Validation Pipeline
+```go
+// String validation pipeline
+func validateEmail(email string) bool {
+    return str.Of(email).
+        Trim().
+        Lower().
+        IsNotEmpty().
+        WhenNotEmpty(func(s *str.String) *str.String {
+            return s
+        }).
+        Test(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+}
+```
+
+### String Formatting Pipeline
+```go
+// String formatting pipeline
+func formatDisplayName(firstName, lastName string) string {
+    return str.Of(firstName).
+        Trim().
+        Title().
+        Append(" ").
+        Append(str.Of(lastName).Trim().Title().String()).
+        Squish().
+        String()
+}
+```
+
+### String Security Pipeline
+```go
+// String security pipeline
+func sanitizeInput(input string) string {
+    return str.Of(input).
+        Trim().
+        Squish().
+        WhenNotEmpty(func(s *str.String) *str.String {
+            return s.Limit(1000) // Prevent extremely long inputs
+        }).
+        String()
+}
+```
+
+## String Best Practices
+
+### Design Principles
+- **Fluent Interface**: Use method chaining for readable code
+- **Immutable Operations**: Each method returns a new String instance
+- **Performance**: Chain operations efficiently
+- **Readability**: Write clear and understandable string operations
+
+### Performance Considerations
+- **Method Chaining**: Chain operations efficiently
+- **Memory Usage**: Be aware of string copying in chained operations
+- **Regex Performance**: Use regex operations judiciously
+- **String Length**: Consider performance for very long strings
+
+### Security Considerations
+- **Input Validation**: Validate all string inputs
+- **XSS Prevention**: Sanitize strings for web output
+- **SQL Injection**: Use proper escaping for database queries
+- **Path Traversal**: Validate file paths and URLs
+
+## Development Guidelines
+
+### String Organization
+- **Consistent Usage**: Use consistent string operations throughout the application
+- **Error Handling**: Handle string operation errors appropriately
+- **Testing**: Test string operations thoroughly
+- **Documentation**: Document complex string operations
+
+### Testing String Operations
+```go
+// Test string operations
+func TestStringOperations(t *testing.T) {
+    // Test basic operations
+    result := str.Of("  Goravel  ").Trim().Lower().UcFirst().String()
+    assert.Equal(t, "Goravel", result)
+    
+    // Test chaining
+    result = str.Of("hello_world").Camel().String()
+    assert.Equal(t, "helloWorld", result)
+    
+    // Test validation
+    assert.True(t, str.Of("Goravel").Contains("Gor"))
+    assert.False(t, str.Of("").IsNotEmpty())
+}
+```
+
+### Monitoring and Maintenance
+- **String Usage**: Monitor string operation patterns
+- **Performance Impact**: Monitor performance of string operations
+- **Error Tracking**: Track string operation errors
+- **Code Quality**: Maintain high code quality for string operations
+
+## Best Practices
+
+### String Design
+- **Fluent Interface**: Design for readable method chaining
+- **Consistent API**: Use consistent method naming and behavior
+- **Error Handling**: Handle edge cases gracefully
+- **Performance**: Optimize for common use cases
+
+### Performance
+- **Efficient Chaining**: Use method chaining efficiently
+- **Memory Management**: Monitor memory usage for string operations
+- **Regex Optimization**: Optimize regex operations
+- **String Pooling**: Consider string pooling for repeated operations
+
+### Security
+- **Input Validation**: Validate all string inputs
+- **Output Encoding**: Properly encode strings for output
+- **Path Security**: Secure file path operations
+- **SQL Security**: Prevent SQL injection in string operations
+
+### Reliability
+- **Error Handling**: Handle string operation errors gracefully
+- **Edge Cases**: Test edge cases thoroughly
+- **Fallback Values**: Provide fallback values for failed operations
+- **Testing**: Test string operations comprehensively

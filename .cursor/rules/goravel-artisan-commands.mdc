@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+---
+
+# Goravel Artisan Console Commands
+
+Goravel includes an Artisan console similar to Laravel's Artisan, providing command-line tools for development.
+
+## Core Artisan Commands
+
+### Application Setup
+```bash
+# Generate application key (32-bit string for encryption)
+go run . artisan key:generate
+
+# Generate JWT secret for authentication
+go run . artisan jwt:secret
+```
+
+### Environment Management
+```bash
+# Encrypt environment file
+go run . artisan env:encrypt
+
+# Encrypt with custom name and key
+go run . artisan env:encrypt --name .env.safe --key <encryption-key>
+
+# Decrypt environment file
+go run . artisan env:decrypt
+
+# Decrypt with custom parameters
+go run . artisan env:decrypt --name .env.safe --key <encryption-key>
+```
+
+### Project Information
+```bash
+# View framework version and configuration
+go run . artisan about
+```
+
+## Development Commands
+- Use `go run . artisan <command>` syntax for all Artisan commands
+- Commands follow Laravel-style naming conventions
+- All commands are executed through the main Go application
+
+## Command Categories
+Based on the documentation structure, Goravel Artisan includes commands for:
+- **Database**: Migrations, seeding, query building
+- **Cache**: Cache management and optimization
+- **Queue**: Background job processing
+- **Task Scheduling**: Cron-like task management
+- **Mail**: Email sending and templates
+- **File Storage**: File management operations
+- **Authentication**: User management and JWT tokens
+- **Testing**: Test generation and execution
+
+## Best Practices
+- Always run `artisan key:generate` after fresh installation
+- Use `artisan jwt:secret` when implementing authentication
+- Encrypt production environment files for security
+- Use Artisan commands for database operations and migrations
+- Follow Laravel-style command patterns for consistency

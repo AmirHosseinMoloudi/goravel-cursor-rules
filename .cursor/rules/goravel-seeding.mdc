@@ -1,0 +1,592 @@
+---
+alwaysApply: true
+---
+
+# Goravel Database Seeding
+
+Based on the [official Goravel seeding documentation](https://www.goravel.dev/database/seeding.html).
+
+## Seeding Overview
+
+### Introduction
+- **Database Seeding**: Goravel includes the ability to seed your database with data using seed structs
+- **Data Population**: Populate database with initial data for development and testing
+- **Structured Approach**: Organized seeding system with multiple seeder classes
+- **Development Support**: Essential for development, testing, and demo environments
+
+### Key Concepts
+- **Seeder Structs**: All seed structs stored in [database/seeders](mdc:database/seeders) directory
+- **DatabaseSeeder**: Default seeder struct provided by framework
+- **Signature Method**: Sets the name of the seeder
+- **Run Method**: Executed when `db:seed` Artisan command is run
+- **Seeder Facade**: Access seeding functionality through `facades.Seeder()`
+
+## Writing Seeders
+
+### Creating Seeders
+```bash
+# Generate seeder using Artisan command
+go run . artisan make:seeder UserSeeder
+
+# Generate multiple seeders
+go run . artisan make:seeder UserSeeder
+go run . artisan make:seeder PostSeeder
+go run . artisan make:seeder CommentSeeder
+```
+
+### Basic Seeder Structure
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type UserSeeder struct {
+}
+
+// Signature The name and signature of the seeder
+func (s *UserSeeder) Signature() string {
+    return "UserSeeder"
+}
+
+// Run executes the seeder logic
+func (s *UserSeeder) Run() error {
+    user := models.User{
+        Name:  "John Doe",
+        Email: "john@example.com",
+    }
+    return facades.Orm().Query().Create(&user)
+}
+```
+
+### DatabaseSeeder Structure
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type DatabaseSeeder struct {
+}
+
+// Signature The name and signature of the seeder
+func (s *DatabaseSeeder) Signature() string {
+    return "DatabaseSeeder"
+}
+
+// Run executes the seeder logic
+func (s *DatabaseSeeder) Run() error {
+    user := models.User{
+        Name: "goravel",
+    }
+    return facades.Orm().Query().Create(&user)
+}
+```
+
+### Advanced Seeder Examples
+
+#### User Seeder with Multiple Records
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type UserSeeder struct {
+}
+
+func (s *UserSeeder) Signature() string {
+    return "UserSeeder"
+}
+
+func (s *UserSeeder) Run() error {
+    users := []models.User{
+        {Name: "John Doe", Email: "john@example.com"},
+        {Name: "Jane Smith", Email: "jane@example.com"},
+        {Name: "Bob Johnson", Email: "bob@example.com"},
+    }
+    
+    for _, user := range users {
+        if err := facades.Orm().Query().Create(&user); err != nil {
+            return err
+        }
+    }
+    
+    return nil
+}
+```
+
+#### Post Seeder with Relationships
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type PostSeeder struct {
+}
+
+func (s *PostSeeder) Signature() string {
+    return "PostSeeder"
+}
+
+func (s *PostSeeder) Run() error {
+    // Get first user
+    var user models.User
+    if err := facades.Orm().Query().First(&user); err != nil {
+        return err
+    }
+    
+    posts := []models.Post{
+        {
+            Title:   "First Post",
+            Content: "This is the content of the first post",
+            UserID:  user.ID,
+        },
+        {
+            Title:   "Second Post", 
+            Content: "This is the content of the second post",
+            UserID:  user.ID,
+        },
+    }
+    
+    for _, post := range posts {
+        if err := facades.Orm().Query().Create(&post); err != nil {
+            return err
+        }
+    }
+    
+    return nil
+}
+```
+
+#### Category Seeder with Bulk Insert
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type CategorySeeder struct {
+}
+
+func (s *CategorySeeder) Signature() string {
+    return "CategorySeeder"
+}
+
+func (s *CategorySeeder) Run() error {
+    categories := []models.Category{
+        {Name: "Technology", Slug: "technology"},
+        {Name: "Science", Slug: "science"},
+        {Name: "Art", Slug: "art"},
+        {Name: "Sports", Slug: "sports"},
+    }
+    
+    // Bulk insert
+    return facades.Orm().Query().Create(&categories)
+}
+```
+
+## Calling Additional Seeders
+
+### Using Call Method
+```go
+// DatabaseSeeder calling other seeders
+func (s *DatabaseSeeder) Run() error {
+    return facades.Seeder().Call([]seeder.Seeder{
+        &UserSeeder{},
+        &PostSeeder{},
+        &CommentSeeder{},
+    })
+}
+```
+
+### Using CallOnce Method
+```go
+// DatabaseSeeder calling seeders only once
+func (s *DatabaseSeeder) Run() error {
+    return facades.Seeder().CallOnce([]seeder.Seeder{
+        &UserSeeder{},
+        &PostSeeder{},
+    })
+}
+```
+
+### Conditional Seeder Execution
+```go
+// Conditional seeder execution
+func (s *DatabaseSeeder) Run() error {
+    var seeders []seeder.Seeder
+    
+    // Add UserSeeder if no users exist
+    var userCount int64
+    facades.Orm().Query().Model(&models.User{}).Count(&userCount)
+    if userCount == 0 {
+        seeders = append(seeders, &UserSeeder{})
+    }
+    
+    // Add PostSeeder if no posts exist
+    var postCount int64
+    facades.Orm().Query().Model(&models.Post{}).Count(&postCount)
+    if postCount == 0 {
+        seeders = append(seeders, &PostSeeder{})
+    }
+    
+    return facades.Seeder().Call(seeders)
+}
+```
+
+### Environment-Specific Seeders
+```go
+// Environment-specific seeding
+func (s *DatabaseSeeder) Run() error {
+    var seeders []seeder.Seeder
+    
+    // Always run these seeders
+    seeders = append(seeders, &UserSeeder{})
+    
+    // Only run in development
+    if facades.Config().GetString("app.env") == "local" {
+        seeders = append(seeders, &TestDataSeeder{})
+        seeders = append(seeders, &DemoDataSeeder{})
+    }
+    
+    return facades.Seeder().Call(seeders)
+}
+```
+
+## Running Seeders
+
+### Basic Seeder Commands
+```bash
+# Run default seeder (DatabaseSeeder)
+go run . artisan db:seed
+
+# Run specific seeder
+go run . artisan db:seed --seeder=UserSeeder
+
+# Run multiple specific seeders
+go run . artisan db:seed --seeder=UserSeeder PostSeeder
+```
+
+### Seeder Registration
+```go
+// app/providers/database_service_provider.go
+func (receiver *DatabaseServiceProvider) Boot(app foundation.Application) {
+    facades.Seeder().Register([]seeder.Seeder{
+        &seeders.DatabaseSeeder{},
+        &seeders.UserSeeder{},
+        &seeders.PostSeeder{},
+        &seeders.CommentSeeder{},
+    })
+}
+```
+
+### Migration with Seeding
+```bash
+# Fresh migration with seeding
+go run . artisan migrate:fresh --seed
+
+# Fresh migration with specific seeder
+go run . artisan migrate:fresh --seed --seeder=UserSeeder
+
+# Refresh migration with seeding
+go run . artisan migrate:refresh --seed
+
+# Refresh migration with specific seeder
+go run . artisan migrate:refresh --seed --seeder=UserSeeder
+```
+
+### Production Seeding
+```bash
+# Force seeding in production (bypass confirmation)
+go run . artisan db:seed --force
+
+# Force specific seeder in production
+go run . artisan db:seed --seeder=UserSeeder --force
+```
+
+## Advanced Seeding Patterns
+
+### Factory-Based Seeding
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type UserFactorySeeder struct {
+}
+
+func (s *UserFactorySeeder) Signature() string {
+    return "UserFactorySeeder"
+}
+
+func (s *UserFactorySeeder) Run() error {
+    // Create 50 users using factory
+    for i := 0; i < 50; i++ {
+        user := models.User{
+            Name:  facades.Helper().RandomString(10),
+            Email: facades.Helper().RandomString(8) + "@example.com",
+        }
+        
+        if err := facades.Orm().Query().Create(&user); err != nil {
+            return err
+        }
+    }
+    
+    return nil
+}
+```
+
+### Relationship Seeding
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type PostWithCommentsSeeder struct {
+}
+
+func (s *PostWithCommentsSeeder) Signature() string {
+    return "PostWithCommentsSeeder"
+}
+
+func (s *PostWithCommentsSeeder) Run() error {
+    // Get users
+    var users []models.User
+    if err := facades.Orm().Query().Get(&users); err != nil {
+        return err
+    }
+    
+    if len(users) == 0 {
+        return errors.New("no users found")
+    }
+    
+    // Create posts for each user
+    for _, user := range users {
+        post := models.Post{
+            Title:   "Post by " + user.Name,
+            Content: "This is a post created by " + user.Name,
+            UserID:  user.ID,
+        }
+        
+        if err := facades.Orm().Query().Create(&post); err != nil {
+            return err
+        }
+        
+        // Create comments for each post
+        for i := 0; i < 3; i++ {
+            comment := models.Comment{
+                Content: "Comment " + string(rune(i+1)) + " on post by " + user.Name,
+                PostID:  post.ID,
+                UserID:  user.ID,
+            }
+            
+            if err := facades.Orm().Query().Create(&comment); err != nil {
+                return err
+            }
+        }
+    }
+    
+    return nil
+}
+```
+
+### Data Validation Seeding
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type ValidatedUserSeeder struct {
+}
+
+func (s *ValidatedUserSeeder) Signature() string {
+    return "ValidatedUserSeeder"
+}
+
+func (s *ValidatedUserSeeder) Run() error {
+    users := []models.User{
+        {Name: "John Doe", Email: "john@example.com"},
+        {Name: "Jane Smith", Email: "jane@example.com"},
+        {Name: "Bob Johnson", Email: "bob@example.com"},
+    }
+    
+    for _, user := range users {
+        // Validate before creating
+        if user.Name == "" || user.Email == "" {
+            continue // Skip invalid users
+        }
+        
+        // Check if user already exists
+        var existingUser models.User
+        if err := facades.Orm().Query().Where("email", user.Email).First(&existingUser); err == nil {
+            continue // Skip if user already exists
+        }
+        
+        if err := facades.Orm().Query().Create(&user); err != nil {
+            facades.Log().Error("Failed to create user", map[string]any{
+                "user": user,
+                "error": err,
+            })
+            continue // Continue with next user
+        }
+    }
+    
+    return nil
+}
+```
+
+### Batch Seeding
+```go
+package seeders
+
+import (
+    "github.com/goravel/framework/contracts/database/seeder"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type BatchUserSeeder struct {
+}
+
+func (s *BatchUserSeeder) Signature() string {
+    return "BatchUserSeeder"
+}
+
+func (s *BatchUserSeeder) Run() error {
+    const batchSize = 100
+    const totalUsers = 1000
+    
+    for i := 0; i < totalUsers; i += batchSize {
+        var users []models.User
+        
+        // Create batch of users
+        for j := 0; j < batchSize && i+j < totalUsers; j++ {
+            users = append(users, models.User{
+                Name:  "User " + string(rune(i+j+1)),
+                Email: "user" + string(rune(i+j+1)) + "@example.com",
+            })
+        }
+        
+        // Insert batch
+        if err := facades.Orm().Query().Create(&users); err != nil {
+            return err
+        }
+        
+        facades.Log().Info("Created batch of users", map[string]any{
+            "batch": i/batchSize + 1,
+            "count": len(users),
+        })
+    }
+    
+    return nil
+}
+```
+
+## Seeder Best Practices
+
+### Design Principles
+- **Single Responsibility**: Each seeder should handle one type of data
+- **Idempotent**: Seeders should be safe to run multiple times
+- **Data Validation**: Validate data before inserting
+- **Error Handling**: Handle errors gracefully
+
+### Performance Considerations
+- **Batch Operations**: Use batch operations for large datasets
+- **Transaction Management**: Use transactions for complex seeding
+- **Memory Management**: Process large datasets in chunks
+- **Database Optimization**: Optimize database operations
+
+### Security Considerations
+- **Data Sanitization**: Sanitize all input data
+- **Access Control**: Ensure proper database permissions
+- **Sensitive Data**: Be careful with sensitive data in seeders
+- **Production Safety**: Use confirmation prompts in production
+
+## Development Guidelines
+
+### Seeder Organization
+- **Naming Convention**: Use descriptive seeder names
+- **Single Purpose**: Each seeder should have single purpose
+- **Dependency Management**: Handle seeder dependencies properly
+- **Documentation**: Document seeder purposes and data
+
+### Testing Seeders
+```go
+// Test seeder functionality
+func TestUserSeeder(t *testing.T) {
+    seeder := &UserSeeder{}
+    
+    // Test signature
+    assert.Equal(t, "UserSeeder", seeder.Signature())
+    
+    // Test run method
+    err := seeder.Run()
+    assert.NoError(t, err)
+    
+    // Verify data was created
+    var userCount int64
+    facades.Orm().Query().Model(&models.User{}).Count(&userCount)
+    assert.Greater(t, userCount, int64(0))
+}
+```
+
+### Monitoring and Maintenance
+- **Seeder Status**: Monitor seeder execution status
+- **Data Quality**: Monitor seeded data quality
+- **Performance**: Monitor seeder performance
+- **Error Tracking**: Track seeder errors and failures
+
+## Best Practices
+
+### Seeder Design
+- **Consistent Data**: Use consistent data patterns
+- **Realistic Data**: Use realistic test data
+- **Relationship Integrity**: Maintain data relationships
+- **Documentation**: Document seeder purposes
+
+### Performance
+- **Efficient Operations**: Use efficient database operations
+- **Batch Processing**: Process data in batches
+- **Memory Management**: Manage memory usage
+- **Database Optimization**: Optimize database queries
+
+### Security
+- **Data Protection**: Protect sensitive data
+- **Input Validation**: Validate all input data
+- **Access Control**: Implement proper access controls
+- **Production Safety**: Use production safety measures
+
+### Reliability
+- **Error Handling**: Handle all errors gracefully
+- **Rollback Support**: Support seeder rollback
+- **Testing**: Test seeders thoroughly
+- **Monitoring**: Monitor seeder execution

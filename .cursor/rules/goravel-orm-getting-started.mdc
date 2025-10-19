@@ -1,0 +1,948 @@
+---
+alwaysApply: true
+---
+
+# Goravel ORM Getting Started
+
+Based on the [official Goravel ORM documentation](https://www.goravel.dev/orm/getting-started.html).
+
+## ORM Overview
+
+### Introduction
+- **Database Interaction**: Goravel provides simple and easy-to-use database interaction through `facades.Orm()`
+- **Object-Relational Mapping**: Map database tables to Go structs for type-safe database operations
+- **Model-Based**: Use models to represent database tables and relationships
+- **Event-Driven**: Built-in model events for lifecycle hooks
+
+### Key Concepts
+- **ORM Facade**: Access ORM functionality through `facades.Orm()`
+- **Models**: Struct representations of database tables
+- **Embedded Types**: `orm.Model` and `orm.SoftDeletes` for common functionality
+- **Query Builder**: Fluent interface for database queries
+- **Model Events**: Lifecycle hooks for model operations
+
+## Model Definition
+
+### Model Convention
+- **Naming**: Models use PascalCase (e.g., `UserOrder`)
+- **Table Names**: Plural snake_case of model name (e.g., `user_orders`)
+- **Embedded Types**: Use `orm.Model` and `orm.SoftDeletes` for common fields
+- **Primary Key**: Default `id` field with auto-increment
+
+### Create Model
+```bash
+# Create basic model
+go run . artisan make:model User
+
+# Create model in nested folder
+go run . artisan make:model user/User
+
+# Create model based on existing table
+go run . artisan make:model --table=users User
+
+# Force overwrite existing model
+go run . artisan make:model --table=users -f User
+```
+
+### Basic Model Structure
+```go
+package models
+
+import (
+    "github.com/goravel/framework/database/orm"
+)
+
+type User struct {
+    orm.Model
+    Name   string
+    Avatar string
+    orm.SoftDeletes
+}
+```
+
+### Advanced Model Features
+```go
+package models
+
+import (
+    "github.com/goravel/framework/database/orm"
+)
+
+type User struct {
+    orm.Model
+    Name   string
+    Avatar string
+    Detail any `gorm:"type:text"`  // JSON field
+    orm.SoftDeletes
+}
+
+// Custom table name
+func (r *User) TableName() string {
+    return "goravel_user"
+}
+
+// Custom database connection
+func (r *User) Connection() string {
+    return "postgres"
+}
+
+// Global scopes
+func (r *User) GlobalScopes() []func(orm.Query) orm.Query {
+    return []func(orm.Query) orm.Query{
+        func(query orm.Query) orm.Query {
+            return query.Where("name", "goravel")
+        },
+    }
+}
+```
+
+### Schema Extensions
+```go
+// app/providers/database_service_provider.go
+import "github.com/goravel/framework/contracts/schema"
+
+facades.Schema().Extend(&schema.Extension{
+    GoTypes: []schema.GoType{
+        {
+            Pattern: "uuid",
+            Type: "uuid.UUID",
+            NullType: "uuid.NullUUID",
+            Imports: []string{"github.com/google/uuid"},
+        },
+        {
+            Pattern: "point",
+            Type: "geom.Point",
+            NullType: "*geom.Point",
+            Imports: []string{"github.com/twpayne/go-geom"},
+        },
+    },
+})
+```
+
+## ORM Facade Functions
+
+### facades.Orm() Available Functions
+- **Connection**: Specify database connection
+- **DB**: Generic database interface `sql.DB`
+- **Query**: Get database instance
+- **Transaction**: Database transactions
+- **WithContext**: Inject HTTP context
+
+### facades.Orm().Query() Available Functions
+- **BeginTransaction**: Begin transaction
+- **Commit**: Commit transaction
+- **Count**: Count records
+- **Create**: Create records
+- **Cursor**: Cursor for large datasets
+- **Delete**: Delete records
+- **Distinct**: Filter repetition
+- **Driver**: Get database driver
+- **Exec**: Execute native SQL
+- **Exists**: Check existence
+- **Find**: Query by ID
+- **FindOrFail**: Query by ID with error
+- **First**: Query single record
+- **FirstOr**: Query or return default
+- **FirstOrCreate**: Find or create
+- **FirstOrNew**: Find or new instance
+- **FirstOrFail**: Query with error on not found
+- **ForceDelete**: Force delete (bypass soft delete)
+- **Get**: Query multiple records
+- **Group**: Group by clause
+- **Having**: Having clause
+- **Join**: Join tables
+- **Limit**: Limit results
+- **LockForUpdate**: Pessimistic locking
+- **Model**: Specify model
+- **Offset**: Offset results
+- **Order**: Order results
+- **OrderBy**: Order by field
+- **OrderByDesc**: Order by field descending
+- **InRandomOrder**: Random order
+- **OrWhere**: OR where clause
+- **OrWhereNotIn**: OR where not in
+- **OrWhereNull**: OR where null
+- **OrWhereIn**: OR where in
+- **OrWhereJsonContains**: OR JSON contains
+- **OrWhereJsonContainsKey**: OR JSON contains key
+- **OrWhereJsonDoesntContain**: OR JSON doesn't contain
+- **OrWhereJsonDoesntContainKey**: OR JSON doesn't contain key
+- **OrWhereJsonLength**: OR JSON length
+- **Paginate**: Paginate results
+- **Pluck**: Query single column
+- **Raw**: Execute native SQL
+- **Restore**: Restore soft deleted
+- **Rollback**: Rollback transaction
+- **Save**: Update existing model
+- **SaveQuietly**: Save without events
+- **Scan**: Scan to struct
+- **Scopes**: Apply scopes
+- **Select**: Specify fields
+- **SharedLock**: Shared lock
+- **Sum**: Sum column
+- **Table**: Specify table
+- **ToSql**: Get SQL with placeholders
+- **ToRawSql**: Get SQL with values
+- **Update**: Update records
+- **UpdateOrCreate**: Update or create
+- **Where**: Where clause
+- **WhereBetween**: Where between
+- **WhereNotBetween**: Where not between
+- **WhereNotIn**: Where not in
+- **WhereNull**: Where null
+- **WhereIn**: Where in
+- **WhereJsonContains**: JSON contains
+- **WhereJsonContainsKey**: JSON contains key
+- **WhereJsonDoesntContain**: JSON doesn't contain
+- **WhereJsonDoesntContainKey**: JSON doesn't contain key
+- **WhereJsonLength**: JSON length
+- **WithoutEvents**: Mute events
+- **WithTrashed**: Include soft deleted
+
+## Query Builder
+
+### Context Injection
+```go
+// Inject HTTP context
+facades.Orm().WithContext(ctx)
+```
+
+### Database Connections
+```go
+// Use specific connection
+facades.Orm().Connection("mysql")
+facades.Orm().Connection("postgres")
+```
+
+### Generic Database Interface
+```go
+// Get sql.DB instance
+db, err := facades.Orm().DB()
+db, err := facades.Orm().Connection("mysql").DB()
+
+// Database operations
+db.Ping()
+db.Close()
+db.Stats()
+
+// Connection pool settings
+db.SetMaxIdleConns(10)
+db.SetMaxOpenConns(100)
+db.SetConnMaxLifetime(time.Hour)
+```
+
+### Basic Queries
+
+#### Select Operations
+```go
+// Query single record
+var user models.User
+facades.Orm().Query().First(&user)
+// SELECT * FROM `users` ORDER BY `users`.`id` LIMIT 1;
+
+// Query with fallback
+facades.Orm().Query().Where("name", "first_user").FirstOr(&user, func() error {
+    user.Name = "goravel"
+    return nil
+})
+
+// Query by ID
+var user models.User
+facades.Orm().Query().Find(&user, 1)
+// SELECT * FROM `users` WHERE `users`.`id` = 1;
+
+// Query multiple by ID
+var users []models.User
+facades.Orm().Query().Find(&users, []int{1,2,3})
+// SELECT * FROM `users` WHERE `users`.`id` IN (1,2,3);
+
+// Query with error on not found
+var user models.User
+err := facades.Orm().Query().FindOrFail(&user, 1)
+
+// Query multiple records
+var users []models.User
+facades.Orm().Query().Where("id in ?", []int{1,2,3}).Get(&users)
+// SELECT * FROM `users` WHERE id in (1,2,3);
+```
+
+#### Find or Create Operations
+```go
+// First or create
+var user models.User
+facades.Orm().Query().Where("gender", 1).FirstOrCreate(&user, models.User{Name: "tom"})
+// SELECT * FROM `users` WHERE `gender` = 1 AND `users`.`name` = 'tom' ORDER BY `users`.`id` LIMIT 1;
+// INSERT INTO `users` (`created_at`,`updated_at`,`name`) VALUES ('2023-09-18 12:51:32.556','2023-09-18 12:51:32.556','tom');
+
+// First or new
+var user models.User
+facades.Orm().Query().Where("gender", 1).FirstOrNew(&user, models.User{Name: "tom"})
+// SELECT * FROM `users` WHERE `gender` = 1 AND `users`.`name` = 'tom' ORDER BY `users`.`id` LIMIT 1;
+```
+
+### Where Clauses
+
+#### Basic Where Conditions
+```go
+// Simple where
+facades.Orm().Query().Where("name", "tom")
+facades.Orm().Query().Where("name = 'tom'")
+facades.Orm().Query().Where("name = ?", "tom")
+
+// Complex where with closure
+facades.Orm().Query().Where("name", "tom").Where(func(query orm.Query) orm.Query {
+    return query.Where("height", 180).Where("age", 18)
+})
+
+// Range conditions
+facades.Orm().Query().WhereBetween("age", 1, 10)
+facades.Orm().Query().WhereNotBetween("age", 1, 10)
+
+// In conditions
+facades.Orm().Query().WhereIn("name", []any{"a"})
+facades.Orm().Query().WhereNotIn("name", []any{"a"})
+
+// Null conditions
+facades.Orm().Query().WhereNull("name")
+
+// OR conditions
+facades.Orm().Query().OrWhere("name", "tom")
+facades.Orm().Query().OrWhereNotIn("name", []any{"a"})
+facades.Orm().Query().OrWhereNull("name")
+facades.Orm().Query().OrWhereIn("name", []any{"a"})
+```
+
+#### JSON Column Queries
+```go
+// JSON field queries
+facades.Orm().Query().Where("preferences->dining->meal", "salad").First(&user)
+facades.Orm().Query().Where("options->languages[0]", "en").First(&user)
+
+// JSON contains
+facades.Orm().Query().WhereJsonContainsKey("contacts->personal->email").First(&user)
+facades.Orm().Query().WhereJsonDoesntContainKey("contacts->personal->email").First(&user)
+facades.Orm().Query().WhereJsonContains("options->languages", "en").First(&user)
+facades.Orm().Query().WhereJsonContains("options->languages", []string{"en", "de"}).First(&user)
+facades.Orm().Query().WhereJsonDoesntContain("options->languages", "en").First(&user)
+facades.Orm().Query().WhereJsonLength('options->languages', 1).First(&user)
+
+// OR JSON conditions
+facades.Orm().Query().OrWhere("preferences->dining->meal", "salad").First(&user)
+facades.Orm().Query().OrWhereJsonContains("options->languages", "en").First(&user)
+```
+
+### Pagination and Ordering
+
+#### Limit and Offset
+```go
+// Limit results
+var users []models.User
+facades.Orm().Query().Where("name", "tom").Limit(3).Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' LIMIT 3;
+
+// Offset and limit
+var users []models.User
+facades.Orm().Query().Where("name", "tom").Offset(5).Limit(3).Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' LIMIT 3 OFFSET 5;
+```
+
+#### Ordering
+```go
+// Order by multiple fields
+var users []models.User
+facades.Orm().Query().Where("name", "tom").Order("sort asc").Order("id desc").Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' ORDER BY sort asc,id desc;
+
+// Order by field
+facades.Orm().Query().Where("name", "tom").OrderBy("sort").Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' ORDER BY sort asc;
+
+// Order by field descending
+facades.Orm().Query().Where("name", "tom").OrderByDesc("sort").Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' ORDER BY sort desc;
+
+// Random order
+facades.Orm().Query().Where("name", "tom").InRandomOrder().Get(&users)
+// SELECT * FROM `users` WHERE name = 'tom' ORDER BY RAND();
+```
+
+#### Pagination
+```go
+// Paginate results
+var users []models.User
+var total int64
+facades.Orm().Query().Paginate(1, 10, &users, &total)
+// SELECT count(*) FROM `users`;
+// SELECT * FROM `users` LIMIT 10;
+```
+
+### Field Selection and Aggregation
+
+#### Select Specific Fields
+```go
+// Select specific fields
+facades.Orm().Query().Select("name", "age").Get(&users)
+// SELECT `name`,`age` FROM `users`;
+```
+
+#### Single Column Queries
+```go
+// Query single column
+var ages []int64
+facades.Orm().Query().Model(&models.User{}).Pluck("age", &ages)
+// SELECT `age` FROM `users`;
+```
+
+#### Aggregation
+```go
+// Count records
+count, err := facades.Orm().Query().Table("users").Count()
+// SELECT count(*) FROM `users`;
+
+// Sum column
+sum, err := facades.Orm().Query().Model(models.User{}).Sum("id")
+```
+
+#### Group By and Having
+```go
+type Result struct {
+    Name  string
+    Total int
+}
+
+var result Result
+facades.Orm().Query().Model(&models.User{}).Select("name, sum(age) as total").Group("name").Having("name = ?", "tom").Get(&result)
+// SELECT name, sum(age) as total FROM `users` GROUP BY `name` HAVING name = "tom";
+```
+
+### Joins
+```go
+type Result struct {
+    Name  string
+    Email string
+}
+
+var result Result
+facades.Orm().Query().Model(&models.User{}).Select("users.name, emails.email").Join("left join emails on emails.user_id = users.id").Scan(&result)
+// SELECT users.name, emails.email FROM `users` LEFT JOIN emails ON emails.user_id = users.id;
+```
+
+### Create Operations
+
+#### Basic Create
+```go
+// Create single record
+user := models.User{Name: "tom", Age: 18}
+err := facades.Orm().Query().Create(&user)
+// INSERT INTO users (name, age, created_at, updated_at) VALUES ("tom", 18, "2022-09-27 22:00:00", "2022-09-27 22:00:00");
+
+// Create without model events
+err := facades.Orm().Query().Table("users").Create(map[string]any{
+    "name": "Goravel",
+})
+
+// Create with model events
+err := facades.Orm().Query().Model(&models.User{}).Create(map[string]any{
+    "name": "Goravel",
+})
+```
+
+#### Multiple Create
+```go
+// Create multiple records
+users := []models.User{{Name: "tom", Age: 18}, {Name: "tim", Age: 19}}
+err := facades.Orm().Query().Create(&users)
+
+// Create multiple with maps
+err := facades.Orm().Query().Table("users").Create(&[]map[string]any{
+    {"name": "Goravel"},
+    {"name": "Framework"},
+})
+
+// Create multiple with model events
+err := facades.Orm().Query().Model(&models.User{}).Create(&[]map[string]any{
+    {"name": "Goravel"},
+    {"name": "Framework"},
+})
+```
+
+### Update Operations
+
+#### Save Model
+```go
+// Update existing model
+var user models.User
+facades.Orm().Query().First(&user)
+
+user.Name = "tom"
+user.Age = 100
+facades.Orm().Query().Save(&user)
+// UPDATE `users` SET `created_at`='2023-09-14 16:03:29.454',`updated_at`='2023-09-18 21:05:59.896',`name`='tom',`age`=100,`avatar`='' WHERE `id` = 1;
+```
+
+#### Update Columns
+```go
+// Update single column
+facades.Orm().Query().Model(&models.User{}).Where("name", "tom").Update("name", "hello")
+// UPDATE `users` SET `name`='hello',`updated_at`='2023-09-18 21:06:30.373' WHERE `name` = 'tom';
+
+// Update with struct
+facades.Orm().Query().Model(&models.User{}).Where("name", "tom").Update(models.User{Name: "hello", Age: 18})
+
+// Update with map
+facades.Orm().Query().Model(&models.User{}).Where("name", "tom").Update(map[string]any{"name": "hello", "age": 18})
+// UPDATE `users` SET `updated_at`='2023-09-18 21:07:06.489',`name`='hello',`age`=18 WHERE `name` = 'tom';
+```
+
+#### Update JSON Fields
+```go
+// Update JSON fields
+facades.Orm().Query().Model(&models.User{}).Where("id", 1).Update("options->enabled", true)
+facades.Orm().Query().Model(&models.User{}).Where("id", 1).Update("options->languages[0]", "en")
+facades.Orm().Query().Model(&models.User{}).Where("id", 1).Update("options->languages", []string{"en", "de"})
+facades.Orm().Query().Model(&models.User{}).Where("id", 1).Update(map[string]any{
+    "preferences->dining->meal": "salad",
+    "options->languages[0]":     "en",
+    "options->enabled":          true,
+})
+```
+
+#### Update or Create
+```go
+// Update or create
+facades.Orm().Query().UpdateOrCreate(&user, models.User{Name: "name"}, models.User{Avatar: "avatar"})
+// SELECT * FROM `users` WHERE `users`.`name` = 'name' AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1;
+// INSERT INTO `users` (`created_at`,`updated_at`,`deleted_at`,`name`,`avatar`) VALUES ('2023-03-11 10:11:08.869','2023-03-11 10:11:08.869',NULL,'name','avatar');
+// UPDATE `users` SET `name`='name',avatar`='avatar',`updated_at`='2023-03-11 10:11:08.881' WHERE users`.`deleted_at` IS NULL AND `id` = 1;
+```
+
+### Delete Operations
+
+#### Basic Delete
+```go
+// Delete by model
+var user models.User
+facades.Orm().Query().Find(&user, 1)
+res, err := facades.Orm().Query().Delete(&user)
+res, err := facades.Orm().Query().Model(&models.User{}).Where("id", 1).Delete()
+res, err := facades.Orm().Query().Table("users").Where("id", 1).Delete()
+// DELETE FROM `users` WHERE `users`.`id` = 1;
+
+num := res.RowsAffected
+```
+
+#### Multiple Delete
+```go
+// Delete multiple records
+facades.Orm().Query().Where("name", "tom").Delete(&models.User{})
+// DELETE FROM `users` WHERE name = 'tom';
+```
+
+#### Force Delete
+```go
+// Force delete (bypass soft delete)
+facades.Orm().Query().Where("name", "tom").ForceDelete(&models.User{})
+facades.Orm().Query().Model(&models.User{}).Where("name", "tom").ForceDelete()
+facades.Orm().Query().Table("users").Where("name", "tom").ForceDelete()
+```
+
+#### Delete with Associations
+```go
+// Delete with model associations
+// Delete Account of user when deleting user
+facades.Orm().Query().Select("Account").Delete(&user)
+
+// Delete Orders and CreditCards of user when deleting user
+facades.Orm().Query().Select("Orders", "CreditCards").Delete(&user)
+
+// Delete all child associations of user when deleting user
+facades.Orm().Query().Select(orm.Associations).Delete(&user)
+
+// Delete all Account of users when deleting users
+facades.Orm().Query().Select("Account").Delete(&users)
+```
+
+### Soft Delete Operations
+
+#### Query Soft Deleted Data
+```go
+// Include soft deleted records
+var user models.User
+facades.Orm().Query().WithTrashed().First(&user)
+```
+
+#### Restore Soft Deleted
+```go
+// Restore soft deleted record
+facades.Orm().Query().WithTrashed().Restore(&models.User{ID: 1})
+facades.Orm().Query().Model(&models.User{ID: 1}).WithTrashed().Restore()
+// UPDATE `users` SET `deleted_at`=NULL WHERE `id` = 1;
+```
+
+### Advanced Operations
+
+#### Cursor for Large Datasets
+```go
+// Cursor for memory-efficient iteration
+cursor, err := facades.Orm().Query().Model(models.User{}).Cursor()
+if err != nil {
+    return err
+}
+for row := range cursor {
+    var user models.User
+    if err := row.Scan(&user); err != nil {
+        return err
+    }
+    fmt.Println(user)
+}
+```
+
+#### Filter Repetition
+```go
+// Distinct results
+var users []models.User
+facades.Orm().Query().Distinct("name").Find(&users)
+```
+
+#### Get Driver
+```go
+// Get database driver
+driver := facades.Orm().Query().Driver()
+
+// Judge driver
+if driver == orm.DriverMysql {}
+```
+
+#### Native SQL
+```go
+// Execute native SQL
+type Result struct {
+    ID   int
+    Name string
+    Age  int
+}
+
+var result Result
+facades.Orm().Query().Raw("SELECT id, name, age FROM users WHERE name = ?", "tom").Scan(&result)
+
+// Execute native update SQL
+res, err := facades.Orm().Query().Exec("DROP TABLE users")
+// DROP TABLE `users`;
+
+num := res.RowsAffected
+```
+
+#### Exists Check
+```go
+// Check if record exists
+exists, err := facades.Orm().Query().Model(&models.User{}).Where("name", "tom").Exists()
+```
+
+#### Get SQL
+```go
+// Get SQL with placeholders
+facades.Orm().Query().ToSql().Get(models.User{})
+// SELECT * FROM "users" WHERE "id" = $1 AND "users"."deleted_at" IS NULL
+
+// Get SQL with values
+facades.Orm().Query().ToRawSql().Get(models.User{})
+// SELECT * FROM "users" WHERE "id" = 1 AND "users"."deleted_at" IS NULL
+```
+
+### Transactions
+
+#### Automatic Transactions
+```go
+import (
+    "github.com/goravel/framework/contracts/database/orm"
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+return facades.Orm().Transaction(func(tx orm.Query) error {
+    var user models.User
+    return tx.Find(&user, user.ID)
+})
+```
+
+#### Manual Transactions
+```go
+// Manual transaction control
+tx, err := facades.Orm().Query().BeginTransaction()
+user := models.User{Name: "Goravel"}
+if err := tx.Create(&user); err != nil {
+    err := tx.Rollback()
+} else {
+    err := tx.Commit()
+}
+```
+
+### Scopes
+
+#### Define Scopes
+```go
+// Custom scope function
+func Paginator(page string, limit string) func(methods orm.Query) orm.Query {
+    return func(query orm.Query) orm.Query {
+        page, _ := strconv.Atoi(page)
+        limit, _ := strconv.Atoi(limit)
+        offset := (page - 1) * limit
+        return query.Offset(offset).Limit(limit)
+    }
+}
+
+// Apply scope
+facades.Orm().Query().Scopes(scopes.Paginator(page, limit)).Find(&entries)
+```
+
+### Raw Expressions
+```go
+import "github.com/goravel/framework/database/db"
+
+// Raw expressions in updates
+facades.Orm().Query().Model(&user).Update("age", db.Raw("age - ?", 1))
+// UPDATE `users` SET `age`=age - 1,`updated_at`='2023-09-14 14:03:20.899' WHERE `users`.`deleted_at` IS NULL AND `id` = 1;
+```
+
+### Pessimistic Locking
+```go
+// Shared lock
+var users []models.User
+facades.Orm().Query().Where("votes > ?", 100).SharedLock().Get(&users)
+
+// Lock for update
+var users []models.User
+facades.Orm().Query().Where("votes > ?", 100).LockForUpdate().Get(&users)
+```
+
+## Model Events
+
+### Event Types
+- **Retrieved**: When existing model is retrieved from database
+- **Creating**: Before new model is saved for first time
+- **Created**: After new model is saved for first time
+- **Updating**: Before existing model is modified
+- **Updated**: After existing model is modified
+- **Saving**: Before model is created or updated
+- **Saved**: After model is created or updated
+- **Deleting**: Before model is deleted
+- **Deleted**: After model is deleted
+- **ForceDeleting**: Before model is force deleted
+- **ForceDeleted**: After model is force deleted
+- **Restored**: After model is restored
+- **Restoring**: Before model is restored
+
+### DispatchesEvents Method
+```go
+import (
+    contractsorm "github.com/goravel/framework/contracts/database/orm"
+    "github.com/goravel/framework/database/orm"
+)
+
+type User struct {
+    orm.Model
+    Name string
+}
+
+func (u *User) DispatchesEvents() map[contractsorm.EventType]func(contractsorm.Event) error {
+    return map[contractsorm.EventType]func(contractsorm.Event) error{
+        contractsorm.EventCreating: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventCreated: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventSaving: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventSaved: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventUpdating: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventUpdated: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventDeleting: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventDeleted: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventForceDeleting: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventForceDeleted: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventRetrieved: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventRestored: func(event contractsorm.Event) error {
+            return nil
+        },
+        contractsorm.EventRestoring: func(event contractsorm.Event) error {
+            return nil
+        },
+    }
+}
+```
+
+## Observers
+
+### Creating Observers
+```bash
+# Create observer
+go run . artisan make:observer UserObserver
+
+# Create observer in nested folder
+go run . artisan make:observer user/UserObserver
+```
+
+### Observer Structure
+```go
+package observers
+
+import (
+    "github.com/goravel/framework/contracts/database/orm"
+)
+
+type UserObserver struct{}
+
+func (u *UserObserver) Created(event orm.Event) error {
+    return nil
+}
+
+func (u *UserObserver) Updated(event orm.Event) error {
+    return nil
+}
+
+func (u *UserObserver) Deleted(event orm.Event) error {
+    return nil
+}
+
+func (u *UserObserver) ForceDeleted(event orm.Event) error {
+    return nil
+}
+```
+
+### Register Observers
+```go
+// app/providers/event_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+    "goravel/app/observers"
+)
+
+type EventServiceProvider struct {
+}
+
+func (receiver *EventServiceProvider) Register(app foundation.Application) {
+    facades.Event().Register(receiver.listen())
+}
+
+func (receiver *EventServiceProvider) Boot(app foundation.Application) {
+    facades.Orm().Observe(models.User{}, &observers.UserObserver{})
+}
+
+func (receiver *EventServiceProvider) listen() map[event.Event][]event.Listener {
+    return map[event.Event][]event.Listener{}
+}
+```
+
+### Observer Event Methods
+- **Context**: Get context passed by `facades.Orm().WithContext()`
+- **GetAttribute**: Get modified value, original if not modified
+- **GetOriginal**: Get original value
+- **IsDirty**: Determine if field is modified
+- **IsClean**: Opposite of IsDirty
+- **Query**: Get new Query for transactions
+- **SetAttribute**: Set new value for field
+
+## Muting Events
+
+### Without Events
+```go
+// Query without events
+var user models.User
+facades.Orm().Query().WithoutEvents().Find(&user, 1)
+```
+
+### Save Without Events
+```go
+// Save without dispatching events
+var user models.User
+err := facades.Orm().Query().FindOrFail(&user, 1)
+user.Name = "Goravel"
+err := facades.Orm().Query().SaveQuietly(&user)
+```
+
+## ORM Best Practices
+
+### Design Principles
+- **Model Organization**: Organize models by domain
+- **Naming Conventions**: Follow Go and database naming conventions
+- **Embedded Types**: Use `orm.Model` and `orm.SoftDeletes` consistently
+- **Event Handling**: Use events for cross-cutting concerns
+
+### Performance Considerations
+- **Eager Loading**: Use relationships efficiently
+- **Batch Operations**: Use batch operations for large datasets
+- **Connection Pooling**: Configure connection pools appropriately
+- **Query Optimization**: Optimize database queries
+
+### Security Considerations
+- **Input Validation**: Validate all inputs
+- **SQL Injection**: Use parameterized queries
+- **Access Control**: Implement proper access controls
+- **Data Sanitization**: Sanitize user inputs
+
+## Development Guidelines
+
+### Model Organization
+- **Single Responsibility**: Each model should represent one entity
+- **Clear Naming**: Use descriptive model and field names
+- **Documentation**: Document model purposes and relationships
+- **Testing**: Test model operations thoroughly
+
+### Query Optimization
+- **Select Fields**: Select only needed fields
+- **Use Indexes**: Create appropriate database indexes
+- **Avoid N+1**: Use eager loading to avoid N+1 queries
+- **Monitor Performance**: Monitor query performance
+
+### Error Handling
+- **Graceful Degradation**: Handle errors gracefully
+- **Logging**: Log errors appropriately
+- **Validation**: Validate data before operations
+- **Rollback**: Use transactions for data consistency
+
+## Best Practices
+
+### ORM Design
+- **Consistent Patterns**: Use consistent patterns across models
+- **Event Usage**: Use events for business logic
+- **Relationship Management**: Manage relationships properly
+- **Documentation**: Document model purposes and usage
+
+### Performance
+- **Efficient Queries**: Write efficient database queries
+- **Batch Operations**: Use batch operations when possible
+- **Connection Management**: Manage database connections properly
+- **Monitoring**: Monitor ORM performance
+
+### Security
+- **Input Validation**: Validate all model inputs
+- **Access Control**: Implement proper access controls
+- **Data Protection**: Protect sensitive data
+- **Audit Logging**: Log important operations
+
+### Reliability
+- **Error Handling**: Handle all errors gracefully
+- **Transaction Management**: Use transactions appropriately
+- **Testing**: Test ORM operations thoroughly
+- **Monitoring**: Monitor ORM system health

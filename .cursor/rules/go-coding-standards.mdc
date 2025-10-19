@@ -1,0 +1,36 @@
+---
+alwaysApply: true
+---
+# Go Coding Standards for Goravel
+
+## Code Style
+- Use `gofmt` and `golint` for code formatting
+- Follow standard Go naming conventions (PascalCase for exported, camelCase for private)
+- Use meaningful variable and function names
+- Keep functions small and focused (single responsibility)
+- Use interfaces for abstraction and testability
+
+## Error Handling
+- Always handle errors explicitly, never ignore them
+- Use `errors.New()` or `fmt.Errorf()` for custom errors
+- Implement proper error wrapping with `fmt.Errorf("context: %w", err)`
+- Return errors as the last return value
+
+## Performance Considerations
+- Use pointers for large structs to avoid copying
+- Prefer composition over inheritance
+- Use `sync.Pool` for object reuse when appropriate
+- Profile code for performance bottlenecks
+
+## Goravel-Specific Patterns
+- Use dependency injection for services
+- Implement Laravel-style service providers
+- Follow Laravel naming conventions for routes and controllers
+- Use the framework's ORM for database operations
+- Implement proper middleware for HTTP requests
+
+## Testing
+- Write unit tests for all public functions
+- Use table-driven tests for multiple scenarios
+- Mock external dependencies
+- Aim for high test coverage

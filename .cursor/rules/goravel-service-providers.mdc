@@ -1,0 +1,286 @@
+---
+alwaysApply: true
+---
+
+# Goravel Service Providers
+
+Based on the [official Goravel service providers documentation](https://www.goravel.dev/architecture-concepts/service-providers.html).
+
+## Service Provider Overview
+
+### Introduction
+- **Kernel Boot Operation**: Most important part of the kernel boot process
+- **Framework Lifecycle**: Key to the life cycle of Goravel
+- **Component Integration**: Enables framework to contain various components (routing, database, queue, cache, etc.)
+- **Custom Providers**: Allows custom service providers for application-specific logic
+
+### Key Concepts
+- **Service Registration**: All providers configured in `providers` array in [config/app.go](mdc:config/app.go)
+- **Two-Phase Loading**: `Register()` method first, then `Boot()` method
+- **Dependency Management**: Optional `Relationship()` method for dependency ordering
+- **Custom Providers**: Stored under [app/providers/](mdc:app/providers/) directory
+
+## Service Provider Lifecycle
+
+### Registration Phase
+```go
+// First phase - Register services
+func (sp *ServiceProvider) Register(app foundation.Application) {
+    // Bind services to container
+    app.Bind("service.key", func(app foundation.Application) (any, error) {
+        return NewService(), nil
+    })
+}
+```
+
+### Boot Phase
+```go
+// Second phase - Initialize services after all providers registered
+func (sp *ServiceProvider) Boot(app foundation.Application) {
+    // Initialize services, register routes, configure middleware
+    // All other providers are already registered
+}
+```
+
+### Dependency Relationships
+```go
+// Optional method for dependency management
+func (sp *ServiceProvider) Relationship() binding.Relationship {
+    return binding.Relationship{
+        Bindings: []string{
+            "session.binding", // What this provider binds
+        },
+        Dependencies: []string{
+            "config.binding", // What this provider depends on
+        },
+        ProvideFor: []string{
+            "cache.binding", // What this provider provides for
+        },
+    }
+}
+```
+
+## Service Provider Structure
+
+### Basic Service Provider
+```go
+type ServiceProvider struct {
+}
+
+func (sp *ServiceProvider) Register(app foundation.Application) {
+    // Register services here
+}
+
+func (sp *ServiceProvider) Boot(app foundation.Application) {
+    // Boot services here
+}
+```
+
+### Service Provider with Dependencies
+```go
+type ServiceProvider struct {
+}
+
+func (sp *ServiceProvider) Relationship() binding.Relationship {
+    return binding.Relationship{
+        Dependencies: []string{
+            "config.binding",
+            "database.binding",
+        },
+    }
+}
+
+func (sp *ServiceProvider) Register(app foundation.Application) {
+    // Register services that depend on config and database
+}
+
+func (sp *ServiceProvider) Boot(app foundation.Application) {
+    // Boot services after dependencies are available
+}
+```
+
+## Configuration Integration
+
+### Provider Registration
+```go
+// config/app.go
+var providers = []foundation.ServiceProvider{
+    // Framework providers
+    &config.ServiceProvider{},
+    &database.ServiceProvider{},
+    &route.ServiceProvider{},
+    
+    // Application providers
+    &app.ServiceProvider{},
+    &user.ServiceProvider{},
+    &api.ServiceProvider{},
+}
+```
+
+### Default Application Provider
+- **Location**: [app/providers/app_service_provider.go](mdc:app/providers/app_service_provider.go)
+- **Purpose**: Implement simple boot logic
+- **Usage**: For smaller projects or simple application logic
+- **Registration**: Automatically included in providers array
+
+## Service Provider Best Practices
+
+### Registration Phase
+- **Bind Services**: Register all services in the `Register()` method
+- **Use Interfaces**: Bind services to interfaces for flexibility
+- **Error Handling**: Always handle errors in service creation
+- **Dependency Injection**: Use the application container for dependencies
+
+### Boot Phase
+- **Initialize Services**: Set up services after all providers are registered
+- **Register Routes**: Define application routes
+- **Configure Middleware**: Set up middleware stack
+- **Event Registration**: Register event listeners
+
+### Dependency Management
+- **Use Relationships**: Implement `Relationship()` for complex dependencies
+- **Order Independence**: Providers with relationships don't depend on registration order
+- **Clear Dependencies**: Explicitly declare what your provider depends on
+- **Provide For**: Declare what your provider provides for other providers
+
+## Common Service Provider Patterns
+
+### Configuration Provider
+```go
+type ConfigServiceProvider struct {
+}
+
+func (sp *ConfigServiceProvider) Register(app foundation.Application) {
+    app.Bind("config", func(app foundation.Application) (any, error) {
+        return NewConfigManager(), nil
+    })
+}
+
+func (sp *ConfigServiceProvider) Boot(app foundation.Application) {
+    // Initialize configuration
+}
+```
+
+### Database Provider
+```go
+type DatabaseServiceProvider struct {
+}
+
+func (sp *DatabaseServiceProvider) Relationship() binding.Relationship {
+    return binding.Relationship{
+        Dependencies: []string{
+            "config.binding",
+        },
+    }
+}
+
+func (sp *DatabaseServiceProvider) Register(app foundation.Application) {
+    app.Bind("database", func(app foundation.Application) (any, error) {
+        config := app.Make("config").(*ConfigManager)
+        return NewDatabaseManager(config), nil
+    })
+}
+```
+
+### Route Provider
+```go
+type RouteServiceProvider struct {
+}
+
+func (sp *RouteServiceProvider) Relationship() binding.Relationship {
+    return binding.Relationship{
+        Dependencies: []string{
+            "config.binding",
+        },
+    }
+}
+
+func (sp *RouteServiceProvider) Register(app foundation.Application) {
+    app.Bind("route", func(app foundation.Application) (any, error) {
+        return NewRouter(), nil
+    })
+}
+
+func (sp *RouteServiceProvider) Boot(app foundation.Application) {
+    // Register routes
+    router := app.Make("route").(*Router)
+    router.RegisterRoutes()
+}
+```
+
+## Development Guidelines
+
+### Service Provider Organization
+- **Single Responsibility**: Each provider should handle one concern
+- **Domain-based**: Group related services in domain-specific providers
+- **Clear Naming**: Use descriptive names for service providers
+- **Documentation**: Document provider purpose and dependencies
+
+### Dependency Management
+- **Minimal Dependencies**: Only declare necessary dependencies
+- **Clear Relationships**: Use `Relationship()` for complex dependency chains
+- **Avoid Circular Dependencies**: Design providers to avoid circular dependencies
+- **Test Dependencies**: Test provider dependencies in isolation
+
+### Performance Considerations
+- **Lazy Loading**: Services are resolved on-demand
+- **Singleton Services**: Use singletons for expensive services
+- **Resource Management**: Properly manage resources in providers
+- **Memory Usage**: Be aware of memory usage in service providers
+
+### Testing Service Providers
+- **Unit Testing**: Test individual service providers
+- **Integration Testing**: Test provider interactions
+- **Dependency Testing**: Test provider dependencies
+- **Mock Dependencies**: Use mocks for testing provider dependencies
+
+## Framework Integration
+
+### Built-in Providers
+- **Config Provider**: Configuration management
+- **Database Provider**: Database connections and ORM
+- **Route Provider**: HTTP routing
+- **Cache Provider**: Caching services
+- **Queue Provider**: Background job processing
+- **Mail Provider**: Email services
+
+### Custom Provider Creation
+```go
+// Create new service provider
+type CustomServiceProvider struct {
+}
+
+func (sp *CustomServiceProvider) Register(app foundation.Application) {
+    // Register custom services
+}
+
+func (sp *CustomServiceProvider) Boot(app foundation.Application) {
+    // Initialize custom services
+}
+
+// Register in config/app.go
+var providers = []foundation.ServiceProvider{
+    // ... other providers
+    &CustomServiceProvider{},
+}
+```
+
+## Best Practices
+
+### Service Provider Design
+- **Keep providers focused**: Each provider should handle one domain
+- **Use interfaces**: Bind services to interfaces for flexibility
+- **Handle errors**: Always handle errors in service creation
+- **Document dependencies**: Clearly document provider dependencies
+
+### Registration Order
+- **Use relationships**: Implement `Relationship()` for complex dependencies
+- **Avoid order dependencies**: Design providers to be order-independent
+- **Test registration**: Test provider registration in different orders
+- **Monitor startup**: Monitor application startup time
+
+### Development Workflow
+- **Start simple**: Begin with the default app service provider
+- **Extract providers**: Extract providers as the application grows
+- **Test providers**: Test providers in isolation
+- **Monitor performance**: Monitor provider performance impact

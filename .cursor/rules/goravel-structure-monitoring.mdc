@@ -1,0 +1,804 @@
+---
+alwaysApply: true
+---
+
+# Goravel Structure & Behavior Monitoring
+
+**CRITICAL**: Always monitor and maintain current structures and behaviors to prevent future problems, especially in existing correct routes and established patterns.
+
+## Structure Monitoring Requirements
+
+### Mandatory Monitoring Rules
+- **EVERY** change must be analyzed against existing structures
+- **EVERY** modification must preserve current behaviors
+- **EVERY** new feature must respect existing patterns
+- **EVERY** refactoring must maintain current functionality
+- **EVERY** optimization must preserve existing behavior
+- **EVERY** update must consider impact on existing routes
+- **EVERY** enhancement must maintain backward compatibility
+
+### Prohibited Structure Breaking
+```go
+// ❌ FORBIDDEN - Breaking existing route structure
+// OLD: facades.Route().Get("/users", userController.Index)
+// NEW: facades.Route().Get("/api/v1/users", userController.Index)
+// This breaks existing clients calling /users
+
+// ❌ FORBIDDEN - Changing established controller patterns
+// OLD: func (c *UserController) Show(ctx http.Context) http.Response
+// NEW: func (c *UserController) GetUser(ctx http.Context) http.Response
+// This breaks existing route bindings
+
+// ❌ FORBIDDEN - Modifying existing service interfaces
+// OLD: type UserService interface { CreateUser(name, email string) error }
+// NEW: type UserService interface { CreateUser(data UserData) error }
+// This breaks existing implementations
+```
+
+### Required Structure Preservation
+```go
+// ✅ REQUIRED - Maintain existing route patterns
+facades.Route().Get("/users", userController.Index)
+facades.Route().Post("/users", userController.Store)
+facades.Route().Get("/users/{id}", userController.Show)
+facades.Route().Put("/users/{id}", userController.Update)
+facades.Route().Delete("/users/{id}", userController.Destroy)
+
+// ✅ REQUIRED - Preserve existing controller structure
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Maintain existing implementation
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+
+// ✅ REQUIRED - Keep existing service interfaces
+type UserService interface {
+    CreateUser(name string, email string) error
+    GetUser(id uint) (*User, error)
+    UpdateUser(id uint, name string, email string) error
+    DeleteUser(id uint) error
+}
+```
+
+## Route Structure Monitoring
+
+### Existing Route Analysis
+```go
+// ✅ REQUIRED - Analyze existing routes before changes
+func analyzeExistingRoutes() {
+    // Document current route structure
+    routes := map[string]string{
+        "GET /users":           "UserController.Index",
+        "POST /users":          "UserController.Store", 
+        "GET /users/{id}":      "UserController.Show",
+        "PUT /users/{id}":      "UserController.Update",
+        "DELETE /users/{id}":   "UserController.Destroy",
+    }
+    
+    // Check for conflicts before adding new routes
+    for route, handler := range routes {
+        if isRouteConflict(route) {
+            log.Warning("Route conflict detected", map[string]any{
+                "route": route,
+                "handler": handler,
+            })
+        }
+    }
+}
+
+// ✅ REQUIRED - Preserve existing route behavior
+func (c *UserController) Index(ctx http.Context) http.Response {
+    // Maintain existing pagination behavior
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    // Preserve existing filtering behavior
+    search := ctx.Request().Query("search", "")
+    status := ctx.Request().Query("status", "")
+    
+    // Keep existing response format
+    users, total, err := c.userService.GetUsers(page, limit, search, status)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "users": users,
+        "pagination": map[string]any{
+            "page":  page,
+            "limit": limit,
+            "total": total,
+        },
+    })
+}
+```
+
+### Route Evolution Strategy
+```go
+// ✅ REQUIRED - Add new routes without breaking existing ones
+func registerRoutes() {
+    // Existing routes (must remain unchanged)
+    facades.Route().Get("/users", userController.Index)
+    facades.Route().Post("/users", userController.Store)
+    facades.Route().Get("/users/{id}", userController.Show)
+    
+    // New routes (can be added)
+    facades.Route().Get("/users/{id}/profile", userController.GetProfile)
+    facades.Route().Get("/users/{id}/posts", userController.GetUserPosts)
+    facades.Route().Get("/users/{id}/comments", userController.GetUserComments)
+}
+
+// ✅ REQUIRED - Version new routes to avoid conflicts
+func registerVersionedRoutes() {
+    // v1 routes (existing)
+    facades.Route().Group("api/v1", func(router route.Router) {
+        router.Get("/users", userController.Index)
+        router.Post("/users", userController.Store)
+    })
+    
+    // v2 routes (new features)
+    facades.Route().Group("api/v2", func(router route.Router) {
+        router.Get("/users", userControllerV2.Index)
+        router.Post("/users", userControllerV2.Store)
+        router.Get("/users/{id}/analytics", userControllerV2.GetAnalytics)
+    })
+}
+```
+
+## Controller Behavior Monitoring
+
+### Existing Controller Analysis
+```go
+// ✅ REQUIRED - Monitor controller behavior patterns
+type ControllerBehavior struct {
+    MethodName    string
+    HTTPMethod    string
+    Route         string
+    Parameters    []string
+    ResponseType  string
+    ErrorHandling string
+}
+
+func analyzeControllerBehavior(controller interface{}) []ControllerBehavior {
+    behaviors := []ControllerBehavior{
+        {
+            MethodName:    "Index",
+            HTTPMethod:    "GET",
+            Route:         "/users",
+            Parameters:    []string{"page", "limit", "search"},
+            ResponseType:  "JSON",
+            ErrorHandling: "Standard",
+        },
+        {
+            MethodName:    "Show",
+            HTTPMethod:    "GET", 
+            Route:         "/users/{id}",
+            Parameters:    []string{"id"},
+            ResponseType:  "JSON",
+            ErrorHandling: "Standard",
+        },
+    }
+    
+    return behaviors
+}
+
+// ✅ REQUIRED - Preserve existing controller patterns
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Maintain existing parameter extraction
+    id := ctx.Request().RouteInt("id")
+    
+    // Preserve existing validation
+    if id <= 0 {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid user ID",
+        })
+    }
+    
+    // Keep existing service call pattern
+    user, err := c.userService.GetUser(id)
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Maintain existing response format
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+### Controller Evolution Monitoring
+```go
+// ✅ REQUIRED - Track controller changes
+type ControllerChange struct {
+    Controller    string
+    Method        string
+    ChangeType    string
+    Impact        string
+    Compatibility bool
+}
+
+func trackControllerChanges() []ControllerChange {
+    return []ControllerChange{
+        {
+            Controller:    "UserController",
+            Method:        "Index",
+            ChangeType:    "Parameter Addition",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+        {
+            Controller:    "UserController", 
+            Method:        "Show",
+            ChangeType:    "Response Enhancement",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Maintain controller consistency
+func (c *UserController) Update(ctx http.Context) http.Response {
+    // Preserve existing parameter handling
+    id := ctx.Request().RouteInt("id")
+    
+    // Maintain existing validation pattern
+    if id <= 0 {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid user ID",
+        })
+    }
+    
+    // Keep existing input validation
+    var input map[string]interface{}
+    if err := ctx.Request().Bind(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid input data",
+        })
+    }
+    
+    // Preserve existing service call
+    user, err := c.userService.UpdateUser(id, input)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to update user",
+        })
+    }
+    
+    // Maintain existing response format
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Service Layer Monitoring
+
+### Service Behavior Analysis
+```go
+// ✅ REQUIRED - Monitor service behavior patterns
+type ServiceBehavior struct {
+    ServiceName   string
+    MethodName    string
+    Parameters    []string
+    ReturnType    string
+    ErrorHandling string
+    Dependencies  []string
+}
+
+func analyzeServiceBehavior(service interface{}) []ServiceBehavior {
+    return []ServiceBehavior{
+        {
+            ServiceName:   "UserService",
+            MethodName:    "CreateUser",
+            Parameters:    []string{"name", "email"},
+            ReturnType:    "(*User, error)",
+            ErrorHandling: "Standard",
+            Dependencies:  []string{"UserRepository", "Validator"},
+        },
+        {
+            ServiceName:   "UserService",
+            MethodName:    "GetUser",
+            Parameters:    []string{"id"},
+            ReturnType:    "(*User, error)",
+            ErrorHandling: "Standard",
+            Dependencies:  []string{"UserRepository"},
+        },
+    }
+}
+
+// ✅ REQUIRED - Preserve existing service patterns
+func (s *UserService) CreateUser(name string, email string) (*User, error) {
+    // Maintain existing validation pattern
+    if name == "" || email == "" {
+        return nil, errors.New("name and email are required")
+    }
+    
+    // Preserve existing repository call
+    user := &User{
+        Name:  name,
+        Email: email,
+    }
+    
+    err := s.userRepo.Create(user)
+    if err != nil {
+        return nil, err
+    }
+    
+    return user, nil
+}
+```
+
+### Service Evolution Tracking
+```go
+// ✅ REQUIRED - Track service evolution
+type ServiceEvolution struct {
+    Service       string
+    Method        string
+    EvolutionType string
+    Impact        string
+    Compatibility bool
+}
+
+func trackServiceEvolution() []ServiceEvolution {
+    return []ServiceEvolution{
+        {
+            Service:       "UserService",
+            Method:        "CreateUser",
+            EvolutionType: "Parameter Addition",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+        {
+            Service:       "UserService",
+            Method:        "GetUser",
+            EvolutionType: "Response Enhancement",
+            Impact:        "Low", 
+            Compatibility: true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Maintain service consistency
+func (s *UserService) UpdateUser(id uint, data map[string]interface{}) (*User, error) {
+    // Preserve existing validation
+    if id <= 0 {
+        return nil, errors.New("invalid user ID")
+    }
+    
+    // Maintain existing repository pattern
+    user, err := s.userRepo.FindByID(id)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Keep existing update logic
+    if name, ok := data["name"].(string); ok {
+        user.Name = name
+    }
+    if email, ok := data["email"].(string); ok {
+        user.Email = email
+    }
+    
+    // Preserve existing save pattern
+    err = s.userRepo.Update(user)
+    if err != nil {
+        return nil, err
+    }
+    
+    return user, nil
+}
+```
+
+## Model Structure Monitoring
+
+### Model Behavior Analysis
+```go
+// ✅ REQUIRED - Monitor model behavior patterns
+type ModelBehavior struct {
+    ModelName     string
+    Fields        []string
+    Relationships []string
+    Methods       []string
+    Tags          map[string]string
+}
+
+func analyzeModelBehavior(model interface{}) ModelBehavior {
+    return ModelBehavior{
+        ModelName: "User",
+        Fields: []string{"ID", "Name", "Email", "IsActive"},
+        Relationships: []string{"Posts", "Comments"},
+        Methods: []string{"GetFullName", "IsActive"},
+        Tags: map[string]string{
+            "json": "user",
+            "gorm": "users",
+        },
+    }
+}
+
+// ✅ REQUIRED - Preserve existing model structure
+type User struct {
+    orm.Model
+    Name     string `json:"name" gorm:"not null"`
+    Email    string `json:"email" gorm:"unique;not null"`
+    IsActive bool   `json:"is_active" gorm:"default:true"`
+    
+    // Preserve existing relationships
+    Posts    []Post    `json:"posts,omitempty" gorm:"foreignKey:UserID"`
+    Comments []Comment `json:"comments,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// ✅ REQUIRED - Maintain existing model methods
+func (u *User) GetFullName() string {
+    return u.Name
+}
+
+func (u *User) IsActive() bool {
+    return u.IsActive
+}
+```
+
+### Model Evolution Monitoring
+```go
+// ✅ REQUIRED - Track model changes
+type ModelChange struct {
+    ModelName     string
+    ChangeType    string
+    Field         string
+    Impact        string
+    Compatibility bool
+}
+
+func trackModelChanges() []ModelChange {
+    return []ModelChange{
+        {
+            ModelName:     "User",
+            ChangeType:    "Field Addition",
+            Field:         "Age",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+        {
+            ModelName:     "User",
+            ChangeType:    "Method Addition",
+            Field:         "GetDisplayName",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Add new fields without breaking existing structure
+type User struct {
+    orm.Model
+    // Existing fields (must remain)
+    Name     string `json:"name" gorm:"not null"`
+    Email    string `json:"email" gorm:"unique;not null"`
+    IsActive bool   `json:"is_active" gorm:"default:true"`
+    
+    // New fields (can be added)
+    Age      int    `json:"age,omitempty" gorm:"default:0"`
+    Phone    string `json:"phone,omitempty" gorm:"default:''"`
+    
+    // Preserve existing relationships
+    Posts    []Post    `json:"posts,omitempty" gorm:"foreignKey:UserID"`
+    Comments []Comment `json:"comments,omitempty" gorm:"foreignKey:UserID"`
+}
+```
+
+## Database Schema Monitoring
+
+### Schema Behavior Analysis
+```go
+// ✅ REQUIRED - Monitor database schema changes
+type SchemaChange struct {
+    TableName     string
+    ChangeType    string
+    Column        string
+    DataType      string
+    Impact        string
+    Compatibility bool
+}
+
+func analyzeSchemaChanges() []SchemaChange {
+    return []SchemaChange{
+        {
+            TableName:     "users",
+            ChangeType:    "Column Addition",
+            Column:        "age",
+            DataType:      "integer",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+        {
+            TableName:     "users",
+            ChangeType:    "Index Addition",
+            Column:        "email",
+            DataType:      "index",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Preserve existing schema structure
+func (m *AddAgeToUsersTable) Up() {
+    // Add new column with default value to maintain compatibility
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.Integer("age").Default(0).Comment("User age")
+    })
+}
+
+// ✅ REQUIRED - Maintain existing column structure
+func (m *AddIndexToUsersTable) Up() {
+    // Add index without breaking existing queries
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.Index("email").Name("idx_users_email")
+    })
+}
+```
+
+### Migration Monitoring
+```go
+// ✅ REQUIRED - Track migration impact
+type MigrationImpact struct {
+    MigrationName string
+    TableName     string
+    ChangeType    string
+    Impact        string
+    Rollback      bool
+}
+
+func trackMigrationImpact() []MigrationImpact {
+    return []MigrationImpact{
+        {
+            MigrationName: "AddAgeToUsersTable",
+            TableName:     "users",
+            ChangeType:    "Column Addition",
+            Impact:        "Low",
+            Rollback:      true,
+        },
+        {
+            MigrationName: "AddIndexToUsersTable",
+            TableName:     "users", 
+            ChangeType:    "Index Addition",
+            Impact:        "Low",
+            Rollback:      true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Ensure migrations are reversible
+func (m *AddAgeToUsersTable) Down() {
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.DropColumn("age")
+    })
+}
+```
+
+## Configuration Monitoring
+
+### Configuration Behavior Analysis
+```go
+// ✅ REQUIRED - Monitor configuration changes
+type ConfigChange struct {
+    ConfigName    string
+    ChangeType    string
+    Key           string
+    Value         interface{}
+    Impact        string
+    Compatibility bool
+}
+
+func analyzeConfigChanges() []ConfigChange {
+    return []ConfigChange{
+        {
+            ConfigName:    "database",
+            ChangeType:    "Connection Addition",
+            Key:           "charset",
+            Value:         "utf8mb4",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+        {
+            ConfigName:    "app",
+            ChangeType:    "Setting Addition",
+            Key:           "timezone",
+            Value:         "UTC",
+            Impact:        "Low",
+            Compatibility: true,
+        },
+    }
+}
+
+// ✅ REQUIRED - Preserve existing configuration structure
+func init() {
+    config := facades.Config
+    config.Add("database", map[string]interface{}{
+        // Existing configuration (must remain)
+        "default": config.Env("DB_CONNECTION", "mysql"),
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "goravel"),
+                "username": config.Env("DB_USERNAME", "root"),
+                "password": config.Env("DB_PASSWORD", ""),
+                // New configuration (can be added)
+                "charset":  config.Env("DB_CHARSET", "utf8mb4"),
+                "timezone": config.Env("DB_TIMEZONE", "UTC"),
+            },
+        },
+    })
+}
+```
+
+## Performance Monitoring
+
+### Performance Impact Analysis
+```go
+// ✅ REQUIRED - Monitor performance impact of changes
+type PerformanceImpact struct {
+    Component     string
+    ChangeType    string
+    Impact        string
+    Measurement   string
+    Threshold     float64
+}
+
+func analyzePerformanceImpact() []PerformanceImpact {
+    return []PerformanceImpact{
+        {
+            Component:   "UserController.Index",
+            ChangeType: "Query Optimization",
+            Impact:      "Positive",
+            Measurement: "Response Time",
+            Threshold:   100.0, // milliseconds
+        },
+        {
+            Component:   "UserService.GetUser",
+            ChangeType: "Caching Addition",
+            Impact:      "Positive",
+            Measurement: "Response Time",
+            Threshold:   50.0, // milliseconds
+        },
+    }
+}
+
+// ✅ REQUIRED - Maintain performance characteristics
+func (c *UserController) Index(ctx http.Context) http.Response {
+    start := time.Now()
+    
+    // Preserve existing performance characteristics
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    users, total, err := c.userService.GetUsers(page, limit)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    // Monitor performance impact
+    duration := time.Since(start)
+    if duration.Milliseconds() > 100 {
+        facades.Log().Warning("Slow response detected", map[string]any{
+            "duration": duration.Milliseconds(),
+            "endpoint": "UserController.Index",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "users": users,
+        "pagination": map[string]any{
+            "page":  page,
+            "limit": limit,
+            "total": total,
+        },
+    })
+}
+```
+
+## Testing Monitoring
+
+### Test Behavior Analysis
+```go
+// ✅ REQUIRED - Monitor test behavior changes
+type TestBehavior struct {
+    TestName      string
+    Component     string
+    TestType      string
+    Coverage      float64
+    Status        string
+}
+
+func analyzeTestBehavior() []TestBehavior {
+    return []TestBehavior{
+        {
+            TestName:  "TestUserController_Show",
+            Component: "UserController",
+            TestType:  "Unit",
+            Coverage:  95.0,
+            Status:    "Passing",
+        },
+        {
+            TestName:  "TestUserService_CreateUser",
+            Component: "UserService",
+            TestType:  "Unit",
+            Coverage:  90.0,
+            Status:    "Passing",
+        },
+    }
+}
+
+// ✅ REQUIRED - Preserve existing test patterns
+func TestUserController_Show(t *testing.T) {
+    // Maintain existing test structure
+    userService := NewUserService(mockRepo)
+    controller := NewUserController(userService)
+    
+    // Preserve existing test logic
+    ctx := &MockContext{}
+    ctx.Request().Set("id", "1")
+    
+    response := controller.Show(ctx)
+    
+    // Keep existing assertions
+    assert.Equal(t, http.StatusOK, response.Status())
+    assert.Contains(t, response.Body(), "user")
+}
+
+// ✅ REQUIRED - Add new tests without breaking existing ones
+func TestUserController_ShowV2(t *testing.T) {
+    // New test for enhanced functionality
+    userService := NewUserService(mockRepo)
+    controller := NewUserController(userService)
+    
+    ctx := &MockContext{}
+    ctx.Request().Set("id", "1")
+    ctx.Request().Set("version", "v2")
+    
+    response := controller.Show(ctx)
+    
+    assert.Equal(t, http.StatusOK, response.Status())
+    assert.Contains(t, response.Body(), "user")
+    assert.Contains(t, response.Body(), "meta")
+}
+```
+
+## Monitoring Best Practices
+
+### Design Principles
+- **Structure Preservation**: Always preserve existing structures
+- **Behavior Consistency**: Maintain consistent behaviors
+- **Pattern Recognition**: Recognize and preserve established patterns
+- **Impact Analysis**: Analyze impact of all changes
+- **Compatibility First**: Prioritize compatibility over convenience
+
+### Implementation Guidelines
+- **Change Tracking**: Track all structural changes
+- **Impact Assessment**: Assess impact before implementing changes
+- **Pattern Documentation**: Document established patterns
+- **Behavior Monitoring**: Monitor behavior changes
+- **Compatibility Testing**: Test compatibility thoroughly
+
+### Monitoring Guidelines
+- **Continuous Monitoring**: Monitor structures continuously
+- **Change Detection**: Detect changes early
+- **Impact Analysis**: Analyze impact immediately
+- **Pattern Preservation**: Preserve patterns consistently
+- **Behavior Tracking**: Track behavior changes
+
+### Maintenance Guidelines
+- **Regular Audits**: Audit structures regularly
+- **Pattern Updates**: Update patterns when necessary
+- **Behavior Validation**: Validate behaviors consistently
+- **Compatibility Checks**: Check compatibility regularly
+- **Documentation Updates**: Update documentation continuously

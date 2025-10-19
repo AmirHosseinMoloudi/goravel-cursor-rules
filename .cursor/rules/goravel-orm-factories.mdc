@@ -1,0 +1,539 @@
+---
+alwaysApply: true
+---
+
+# Goravel ORM Factories
+
+Based on the [official Goravel ORM factories documentation](https://www.goravel.dev/orm/factories.html).
+
+## Factories Overview
+
+### Introduction
+- **Testing & Seeding**: Factories are essential for testing applications and seeding databases
+- **Default Attributes**: Define default attribute values for models instead of manual input
+- **Random Data Generation**: Use `brianvoe/gofakeit` for generating random data
+- **Model Binding**: Bind factories to models using the `Factory()` method
+
+### Key Concepts
+- **Factory Struct**: Structs with `Definition()` method returning default attribute values
+- **Model Binding**: Connect factories to models through the `Factory()` method
+- **Data Generation**: Generate realistic test data automatically
+- **Flexible Overrides**: Override default values when creating models
+
+## Generating Factories
+
+### Creating Factories
+```bash
+# Create a new factory using Artisan command
+go run . artisan make:factory PostFactory
+```
+
+### Basic Factory Structure
+```go
+// database/factories/user_factory.go
+package factories
+
+type UserFactory struct {
+}
+
+// Definition Define the model's default state
+func (f *UserFactory) Definition() map[string]any {
+    return map[string]any{
+        "Name": "Goravel",
+    }
+}
+```
+
+### Advanced Factory with Random Data
+```go
+package factories
+
+import (
+    "github.com/brianvoe/gofakeit/v6"
+)
+
+type UserFactory struct {
+}
+
+func (f *UserFactory) Definition() map[string]any {
+    return map[string]any{
+        "Name":     gofakeit.Name(),
+        "Email":    gofakeit.Email(),
+        "Avatar":   gofakeit.ImageURL(100, 100),
+        "Age":      gofakeit.IntRange(18, 80),
+        "IsActive": gofakeit.Bool(),
+    }
+}
+```
+
+### Complex Factory with Relationships
+```go
+package factories
+
+import (
+    "github.com/brianvoe/gofakeit/v6"
+    "goravel/app/models"
+)
+
+type PostFactory struct {
+}
+
+func (f *PostFactory) Definition() map[string]any {
+    return map[string]any{
+        "Title":   gofakeit.Sentence(5),
+        "Content": gofakeit.Paragraph(3, 5, 10, " "),
+        "Status":  gofakeit.RandomString([]string{"draft", "published", "archived"}),
+        "UserID":  gofakeit.IntRange(1, 100),
+    }
+}
+
+type CommentFactory struct {
+}
+
+func (f *CommentFactory) Definition() map[string]any {
+    return map[string]any{
+        "Content": gofakeit.Sentence(10),
+        "PostID":  gofakeit.IntRange(1, 100),
+        "UserID":  gofakeit.IntRange(1, 100),
+    }
+}
+```
+
+## Model & Factory Discovery Conventions
+
+### Binding Factory to Model
+```go
+// app/models/user.go
+package models
+
+import (
+    "github.com/goravel/framework/contracts/database/factory"
+    "github.com/goravel/framework/database/orm"
+    "goravel/database/factories"
+)
+
+type User struct {
+    orm.Model
+    Name   string
+    Avatar string
+    orm.SoftDeletes
+}
+
+func (u *User) Factory() factory.Factory {
+    return &factories.UserFactory{}
+}
+```
+
+### Multiple Factory Bindings
+```go
+// app/models/post.go
+package models
+
+import (
+    "github.com/goravel/framework/contracts/database/factory"
+    "github.com/goravel/framework/database/orm"
+    "goravel/database/factories"
+)
+
+type Post struct {
+    orm.Model
+    Title   string
+    Content string
+    UserID  uint
+    User    *User
+}
+
+func (p *Post) Factory() factory.Factory {
+    return &factories.PostFactory{}
+}
+
+type Comment struct {
+    orm.Model
+    Content string
+    PostID  uint
+    UserID  uint
+    Post    *Post
+    User    *User
+}
+
+func (c *Comment) Factory() factory.Factory {
+    return &factories.CommentFactory{}
+}
+```
+
+## Creating Models Using Factories
+
+### Instantiating Models
+
+#### Basic Model Creation
+```go
+// Create single model without persisting
+var user models.User
+err := facades.Orm().Factory().Make(&user)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Multiple Model Creation
+```go
+// Create multiple models using Count method
+var users []models.User
+err := facades.Orm().Factory().Count(2).Make(&users)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Override Default Values
+```go
+// Override specific attributes while keeping defaults for others
+var user models.User
+err := facades.Orm().Factory().Make(&user, map[string]any{
+    "Avatar": "custom-avatar.jpg",
+    "Name":   "Custom Name",
+})
+```
+
+#### Advanced Override Patterns
+```go
+// Override with complex data
+var user models.User
+err := facades.Orm().Factory().Make(&user, map[string]any{
+    "Name":     "John Doe",
+    "Email":    "john@example.com",
+    "IsActive": true,
+    "Age":      30,
+})
+```
+
+### Persisting Models
+
+#### Basic Model Persistence
+```go
+// Create and save single model to database
+var user models.User
+err := facades.Orm().Factory().Create(&user)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Multiple Model Persistence
+```go
+// Create and save multiple models to database
+var users []models.User
+err := facades.Orm().Factory().Count(5).Create(&users)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Persist with Overrides
+```go
+// Create and save with custom attributes
+var user models.User
+err := facades.Orm().Factory().Create(&user, map[string]any{
+    "Name":   "Admin User",
+    "Email":  "admin@example.com",
+    "Avatar": "admin-avatar.png",
+})
+```
+
+#### Batch Creation with Variations
+```go
+// Create multiple users with different attributes
+users := []models.User{
+    {Name: "User 1", Email: "user1@example.com"},
+    {Name: "User 2", Email: "user2@example.com"},
+    {Name: "User 3", Email: "user3@example.com"},
+}
+
+for i, user := range users {
+    err := facades.Orm().Factory().Create(&user, map[string]any{
+        "Name":  user.Name,
+        "Email": user.Email,
+    })
+    if err != nil {
+        // Handle error
+    }
+}
+```
+
+### Ignore Model Events
+
+#### CreateQuietly Method
+```go
+// Create model without triggering model events
+var user models.User
+err := facades.Orm().Factory().CreateQuietly(&user)
+if err != nil {
+    // Handle error
+}
+```
+
+#### Use Cases for CreateQuietly
+```go
+// Useful when you want to skip model events during testing or seeding
+var users []models.User
+err := facades.Orm().Factory().Count(10).CreateQuietly(&users)
+if err != nil {
+    // Handle error
+}
+
+// Skip events for specific model types
+var posts []models.Post
+err := facades.Orm().Factory().Count(5).CreateQuietly(&posts)
+```
+
+## Advanced Factory Patterns
+
+### Factory with Relationships
+```go
+package factories
+
+import (
+    "github.com/brianvoe/gofakeit/v6"
+    "goravel/app/models"
+)
+
+type PostFactory struct {
+}
+
+func (f *PostFactory) Definition() map[string]any {
+    return map[string]any{
+        "Title":   gofakeit.Sentence(5),
+        "Content": gofakeit.Paragraph(3, 5, 10, " "),
+        "Status":  gofakeit.RandomString([]string{"draft", "published"}),
+    }
+}
+
+// Create post with user relationship
+func (f *PostFactory) WithUser() map[string]any {
+    definition := f.Definition()
+    
+    // Create user first
+    var user models.User
+    facades.Orm().Factory().Create(&user)
+    
+    definition["UserID"] = user.ID
+    return definition
+}
+```
+
+### Conditional Factory Data
+```go
+package factories
+
+import (
+    "github.com/brianvoe/gofakeit/v6"
+)
+
+type UserFactory struct {
+}
+
+func (f *UserFactory) Definition() map[string]any {
+    return map[string]any{
+        "Name":     gofakeit.Name(),
+        "Email":    gofakeit.Email(),
+        "Role":     gofakeit.RandomString([]string{"user", "admin", "moderator"}),
+        "IsActive": gofakeit.Bool(),
+    }
+}
+
+// Create admin user
+func (f *UserFactory) Admin() map[string]any {
+    definition := f.Definition()
+    definition["Role"] = "admin"
+    definition["IsActive"] = true
+    return definition
+}
+
+// Create inactive user
+func (f *UserFactory) Inactive() map[string]any {
+    definition := f.Definition()
+    definition["IsActive"] = false
+    return definition
+}
+```
+
+### Factory States
+```go
+package factories
+
+import (
+    "github.com/brianvoe/gofakeit/v6"
+)
+
+type PostFactory struct {
+}
+
+func (f *PostFactory) Definition() map[string]any {
+    return map[string]any{
+        "Title":   gofakeit.Sentence(5),
+        "Content": gofakeit.Paragraph(3, 5, 10, " "),
+        "Status":  "draft",
+    }
+}
+
+// Published post state
+func (f *PostFactory) Published() map[string]any {
+    definition := f.Definition()
+    definition["Status"] = "published"
+    definition["PublishedAt"] = gofakeit.Date()
+    return definition
+}
+
+// Archived post state
+func (f *PostFactory) Archived() map[string]any {
+    definition := f.Definition()
+    definition["Status"] = "archived"
+    definition["ArchivedAt"] = gofakeit.Date()
+    return definition
+}
+```
+
+## Testing with Factories
+
+### Unit Testing
+```go
+func TestUserCreation(t *testing.T) {
+    // Create user using factory
+    var user models.User
+    err := facades.Orm().Factory().Create(&user)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, user.Name)
+    assert.NotEmpty(t, user.Email)
+}
+
+func TestUserWithCustomAttributes(t *testing.T) {
+    // Create user with specific attributes
+    var user models.User
+    err := facades.Orm().Factory().Create(&user, map[string]any{
+        "Name":  "Test User",
+        "Email": "test@example.com",
+    })
+    assert.NoError(t, err)
+    assert.Equal(t, "Test User", user.Name)
+    assert.Equal(t, "test@example.com", user.Email)
+}
+```
+
+### Integration Testing
+```go
+func TestPostWithUser(t *testing.T) {
+    // Create user first
+    var user models.User
+    err := facades.Orm().Factory().Create(&user)
+    assert.NoError(t, err)
+    
+    // Create post with user relationship
+    var post models.Post
+    err = facades.Orm().Factory().Create(&post, map[string]any{
+        "UserID": user.ID,
+        "Title":  "Test Post",
+    })
+    assert.NoError(t, err)
+    assert.Equal(t, user.ID, post.UserID)
+}
+```
+
+### Database Seeding
+```go
+// database/seeders/database_seeder.go
+package seeders
+
+import (
+    "goravel/app/models"
+    "github.com/goravel/framework/facades"
+)
+
+type DatabaseSeeder struct {
+}
+
+func (s *DatabaseSeeder) Run() {
+    // Seed users
+    var users []models.User
+    err := facades.Orm().Factory().Count(50).Create(&users)
+    if err != nil {
+        panic(err)
+    }
+    
+    // Seed posts for each user
+    for _, user := range users {
+        var posts []models.Post
+        err := facades.Orm().Factory().Count(3).Create(&posts, map[string]any{
+            "UserID": user.ID,
+        })
+        if err != nil {
+            panic(err)
+        }
+    }
+}
+```
+
+## Factory Best Practices
+
+### Design Principles
+- **Realistic Data**: Generate realistic test data that resembles production data
+- **Consistent Patterns**: Use consistent patterns across all factories
+- **Flexible Overrides**: Allow easy override of default values
+- **Relationship Support**: Support complex relationships between models
+
+### Performance Considerations
+- **Batch Operations**: Use batch operations for creating multiple models
+- **Memory Management**: Be mindful of memory usage when creating large datasets
+- **Database Optimization**: Use appropriate database indexes for factory-generated data
+- **Cleanup**: Clean up test data after tests complete
+
+### Security Considerations
+- **Data Privacy**: Avoid using real personal data in factories
+- **Sensitive Information**: Don't include sensitive information in factory data
+- **Test Isolation**: Ensure test data doesn't interfere with other tests
+- **Data Validation**: Validate factory-generated data
+
+## Development Guidelines
+
+### Factory Organization
+- **Logical Grouping**: Group related factories together
+- **Clear Naming**: Use clear, descriptive names for factories
+- **Documentation**: Document factory purposes and usage
+- **Testing**: Test factory functionality thoroughly
+
+### Data Generation
+- **Realistic Values**: Generate realistic test data
+- **Variety**: Ensure variety in generated data
+- **Consistency**: Maintain consistency in data patterns
+- **Performance**: Optimize data generation for performance
+
+### Error Handling
+- **Factory Errors**: Handle factory creation errors gracefully
+- **Validation**: Validate factory-generated data
+- **Rollback**: Use transactions for factory operations
+- **Logging**: Log factory errors appropriately
+
+## Best Practices
+
+### Factory Design
+- **Consistent Structure**: Use consistent structure for all factories
+- **Clear Documentation**: Document factory purposes and usage
+- **Flexible Overrides**: Support easy override of default values
+- **Relationship Support**: Support complex model relationships
+
+### Performance
+- **Efficient Generation**: Generate data efficiently
+- **Batch Operations**: Use batch operations when possible
+- **Memory Management**: Manage memory usage appropriately
+- **Database Optimization**: Optimize database operations
+
+### Security
+- **Data Privacy**: Protect data privacy in factories
+- **Sensitive Information**: Avoid sensitive information
+- **Test Isolation**: Ensure proper test isolation
+- **Data Validation**: Validate all generated data
+
+### Reliability
+- **Error Handling**: Handle all factory errors gracefully
+- **Data Consistency**: Maintain data consistency
+- **Testing**: Test factory functionality thoroughly
+- **Monitoring**: Monitor factory performance

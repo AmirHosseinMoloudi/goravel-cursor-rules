@@ -1,0 +1,769 @@
+---
+alwaysApply: true
+---
+
+# Goravel HTTP Tests
+
+Based on the [official Goravel HTTP testing documentation](https://www.goravel.dev/testing/http-tests.html).
+
+## HTTP Testing Overview
+
+### Introduction
+- **Web Application Testing**: Test HTTP requests from start to finish
+- **Simulated Requests**: Simulate requests without complex test environments
+- **Request Cycle**: Internal simulation of application's request cycle
+- **Response Verification**: Comprehensive response verification methods
+
+### Key Concepts
+- **TestRequest**: `framework/contracts/testing.TestRequest` handles HTTP verbs
+- **TestResponse**: `framework/contracts/testing.TestResponse` for response verification
+- **HTTP Methods**: Support for Get, Post, Put, Delete, and other HTTP verbs
+- **Request Simulation**: Internal simulation without real HTTP calls
+
+## Making HTTP Requests
+
+### Basic HTTP Requests
+```go
+// ✅ REQUIRED - Basic HTTP request testing
+func (s *ExampleTestSuite) TestIndex() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    response.AssertStatus(200)
+}
+
+// ✅ REQUIRED - Different HTTP methods
+func (s *ExampleTestSuite) TestUserOperations() {
+    // GET request
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+    
+    // POST request
+    response, err = s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertCreated()
+    
+    // PUT request
+    response, err = s.Http(s.T()).Put("/users/1", nil)
+    s.Nil(err)
+    response.AssertOk()
+    
+    // DELETE request
+    response, err = s.Http(s.T()).Delete("/users/1")
+    s.Nil(err)
+    response.AssertNoContent()
+}
+```
+
+### Customizing Request Headers
+```go
+// ✅ REQUIRED - Single header customization
+func (s *ExampleTestSuite) TestWithCustomHeader() {
+    response, err := s.Http(s.T()).WithHeader("X-Custom-Header", "Value").Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+}
+
+// ✅ REQUIRED - Multiple headers
+func (s *ExampleTestSuite) TestWithMultipleHeaders() {
+    response, err := s.Http(s.T()).WithHeaders(map[string]string{
+        "X-Custom-Header": "Value",
+        "Accept":          "application/json",
+        "Authorization":   "Bearer token123",
+    }).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+}
+
+// ✅ REQUIRED - Content-Type header
+func (s *ExampleTestSuite) TestWithContentType() {
+    response, err := s.Http(s.T()).WithHeader("Content-Type", "application/json").Post("/users", nil)
+    s.Nil(err)
+    response.AssertCreated()
+}
+```
+
+### Cookie Management
+```go
+// ✅ REQUIRED - Single cookie
+import "github.com/goravel/framework/testing/http"
+
+func (s *ExampleTestSuite) TestWithCookie() {
+    response, err := s.Http(s.T()).WithCookie(http.Cookie("name", "krishan")).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+}
+
+// ✅ REQUIRED - Multiple cookies
+func (s *ExampleTestSuite) TestWithMultipleCookies() {
+    response, err := s.Http(s.T()).WithCookies(http.Cookies(map[string]string{
+        "name": "krishan",
+        "lang": "en",
+        "theme": "dark",
+    })).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+}
+
+// ✅ REQUIRED - Authentication cookie
+func (s *ExampleTestSuite) TestWithAuthCookie() {
+    response, err := s.Http(s.T()).WithCookie(http.Cookie("auth_token", "abc123")).Get("/protected")
+    s.Nil(err)
+    response.AssertOk()
+}
+```
+
+### Session Management
+```go
+// ✅ REQUIRED - Session data
+func (s *ExampleTestSuite) TestWithSession() {
+    response, err := s.Http(s.T()).WithSession(map[string]any{
+        "role": "admin",
+        "user_id": 1,
+    }).Get("/admin/dashboard")
+    s.Nil(err)
+    response.AssertOk()
+}
+
+// ✅ REQUIRED - User session
+func (s *ExampleTestSuite) TestWithUserSession() {
+    response, err := s.Http(s.T()).WithSession(map[string]any{
+        "user": map[string]any{
+            "id":    1,
+            "name":  "John Doe",
+            "email": "john@example.com",
+        },
+    }).Get("/profile")
+    s.Nil(err)
+    response.AssertOk()
+}
+```
+
+### Debugging Responses
+```go
+// ✅ REQUIRED - Response debugging methods
+func (s *ExampleTestSuite) TestResponseDebugging() {
+    response, err := s.Http(s.T()).WithSession(map[string]any{"role": "admin"}).Get("/users/1")
+    s.Nil(err)
+    
+    // Get response content
+    content, err := response.Content()
+    s.Nil(err)
+    s.NotEmpty(content)
+    
+    // Get response cookies
+    cookies := response.Cookies()
+    s.NotNil(cookies)
+    
+    // Get response headers
+    headers := response.Headers()
+    s.NotNil(headers)
+    
+    // Get JSON response
+    json, err := response.Json()
+    s.Nil(err)
+    s.NotNil(json)
+    
+    // Get session data
+    session, err := response.Session()
+    s.Nil(err)
+    s.NotNil(session)
+}
+```
+
+## Building Request Bodies
+
+### HTTP Body Builder
+```go
+// ✅ REQUIRED - Building request bodies
+import "github.com/goravel/framework/support/http"
+
+func (s *ExampleTestSuite) TestWithRequestBody() {
+    builder := http.NewBody().SetField("name", "krishan")
+    
+    body, err := builder.Build()
+    s.Nil(err)
+    
+    response, err := s.Http(s.T()).WithHeader("Content-Type", body.ContentType()).Post("/users", body)
+    s.Nil(err)
+    response.AssertCreated()
+}
+
+// ✅ REQUIRED - Multiple fields
+func (s *ExampleTestSuite) TestWithMultipleFields() {
+    builder := http.NewBody().
+        SetField("name", "John Doe").
+        SetField("email", "john@example.com").
+        SetField("age", 30)
+    
+    body, err := builder.Build()
+    s.Nil(err)
+    
+    response, err := s.Http(s.T()).WithHeader("Content-Type", body.ContentType()).Post("/users", body)
+    s.Nil(err)
+    response.AssertCreated()
+}
+
+// ✅ REQUIRED - JSON body
+func (s *ExampleTestSuite) TestWithJSONBody() {
+    jsonData := map[string]interface{}{
+        "name":  "John Doe",
+        "email": "john@example.com",
+        "age":   30,
+    }
+    
+    builder := http.NewBody().SetJSON(jsonData)
+    body, err := builder.Build()
+    s.Nil(err)
+    
+    response, err := s.Http(s.T()).WithHeader("Content-Type", "application/json").Post("/users", body)
+    s.Nil(err)
+    response.AssertCreated()
+}
+```
+
+## Testing JSON APIs
+
+### Basic JSON Testing
+```go
+// ✅ REQUIRED - Basic JSON API testing
+func (s *ExampleTestSuite) TestJSONAPI() {
+    response, err := s.Http(s.T()).WithHeader("Content-Type", "application/json").Post("/users", nil)
+    s.Nil(err)
+    
+    response.AssertStatus(201).
+        AssertJson(map[string]any{
+            "created": true,
+        })
+}
+
+// ✅ REQUIRED - Accessing JSON response
+func (s *ExampleTestSuite) TestJSONResponse() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    json, err := response.Json()
+    s.Nil(err)
+    s.True(json["success"].(bool))
+    s.NotNil(json["user"])
+}
+```
+
+### Exact JSON Matching
+```go
+// ✅ REQUIRED - Exact JSON matching
+func (s *ExampleTestSuite) TestExactJSON() {
+    response, err := s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    
+    response.AssertStatus(201).
+        AssertExactJson(map[string]any{
+            "created": true,
+            "user": map[string]any{
+                "id":   1,
+                "name": "John Doe",
+            },
+        })
+}
+```
+
+### Fluent JSON Testing
+```go
+// ✅ REQUIRED - Fluent JSON testing
+import contractstesting "github.com/goravel/framework/contracts/testing"
+
+func (s *ExampleTestSuite) TestFluentJSON() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.Where("id", float64(1)).
+                Where("name", "bowen").
+                WhereNot("lang", "en").
+                Missing("password")
+        })
+}
+```
+
+### Attribute Presence/Absence
+```go
+// ✅ REQUIRED - Attribute presence/absence
+func (s *ExampleTestSuite) TestAttributePresence() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.Has("username").
+                Missing("password")
+        })
+}
+
+// ✅ REQUIRED - Multiple attributes
+func (s *ExampleTestSuite) TestMultipleAttributes() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.Has([]string{"username", "email"}).
+                MissingAll([]string{"verified", "password"})
+        })
+}
+
+// ✅ REQUIRED - Any attribute presence
+func (s *ExampleTestSuite) TestAnyAttribute() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.HasAny([]string{"username", "email"})
+        })
+}
+```
+
+### JSON Collection Assertions
+```go
+// ✅ REQUIRED - JSON collection testing
+func (s *ExampleTestSuite) TestJSONCollection() {
+    response, err := s.Http(s.T()).Get("/items")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.Count("items", 2).
+                First("items", func(json contractstesting.AssertableJSON) {
+                    json.Where("id", 1)
+                })
+        })
+}
+
+// ✅ REQUIRED - Each item in collection
+func (s *ExampleTestSuite) TestEachItem() {
+    response, err := s.Http(s.T()).Get("/items")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.Count("items", 2).
+                Each("items", func(json contractstesting.AssertableJSON) {
+                    json.Has("id")
+                })
+        })
+}
+
+// ✅ REQUIRED - Scoped collection testing
+func (s *ExampleTestSuite) TestScopedCollection() {
+    response, err := s.Http(s.T()).Get("/items")
+    s.Nil(err)
+    
+    response.AssertStatus(200).
+        AssertFluentJson(func(json contractstesting.AssertableJSON) {
+            json.HasWithScope("items", 2, func(json contractstesting.AssertableJSON) {
+                json.Where("id", 1)
+            })
+        })
+}
+```
+
+## HTTP Status Code Assertions
+
+### Success Status Codes
+```go
+// ✅ REQUIRED - Success status assertions
+func (s *ExampleTestSuite) TestSuccessStatusCodes() {
+    // 200 OK
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+    
+    // 201 Created
+    response, err = s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertCreated()
+    
+    // 202 Accepted
+    response, err = s.Http(s.T()).Post("/jobs", nil)
+    s.Nil(err)
+    response.AssertAccepted()
+    
+    // 204 No Content
+    response, err = s.Http(s.T()).Delete("/users/1")
+    s.Nil(err)
+    response.AssertNoContent()
+    
+    // 206 Partial Content
+    response, err = s.Http(s.T()).Get("/files/1?range=bytes=0-1023")
+    s.Nil(err)
+    response.AssertPartialContent()
+}
+```
+
+### Client Error Status Codes
+```go
+// ✅ REQUIRED - Client error status assertions
+func (s *ExampleTestSuite) TestClientErrorStatusCodes() {
+    // 400 Bad Request
+    response, err := s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertBadRequest()
+    
+    // 401 Unauthorized
+    response, err = s.Http(s.T()).Get("/protected")
+    s.Nil(err)
+    response.AssertUnauthorized()
+    
+    // 402 Payment Required
+    response, err = s.Http(s.T()).Get("/premium")
+    s.Nil(err)
+    response.AssertPaymentRequired()
+    
+    // 403 Forbidden
+    response, err = s.Http(s.T()).Get("/admin")
+    s.Nil(err)
+    response.AssertForbidden()
+    
+    // 404 Not Found
+    response, err = s.Http(s.T()).Get("/users/999")
+    s.Nil(err)
+    response.AssertNotFound()
+    
+    // 405 Method Not Allowed
+    response, err = s.Http(s.T()).Get("/users")
+    s.Nil(err)
+    response.AssertMethodNotAllowed()
+    
+    // 406 Not Acceptable
+    response, err = s.Http(s.T()).WithHeader("Accept", "text/xml").Get("/users")
+    s.Nil(err)
+    response.AssertNotAcceptable()
+    
+    // 408 Request Timeout
+    response, err = s.Http(s.T()).Get("/slow")
+    s.Nil(err)
+    response.AssertRequestTimeout()
+    
+    // 409 Conflict
+    response, err = s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertConflict()
+    
+    // 410 Gone
+    response, err = s.Http(s.T()).Get("/deleted-resource")
+    s.Nil(err)
+    response.AssertGone()
+    
+    // 422 Unprocessable Entity
+    response, err = s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertUnprocessableEntity()
+    
+    // 429 Too Many Requests
+    response, err = s.Http(s.T()).Get("/rate-limited")
+    s.Nil(err)
+    response.AssertTooManyRequests()
+}
+```
+
+### Server Error Status Codes
+```go
+// ✅ REQUIRED - Server error status assertions
+func (s *ExampleTestSuite) TestServerErrorStatusCodes() {
+    // 500 Internal Server Error
+    response, err := s.Http(s.T()).Get("/error")
+    s.Nil(err)
+    response.AssertInternalServerError()
+    
+    // 503 Service Unavailable
+    response, err = s.Http(s.T()).Get("/maintenance")
+    s.Nil(err)
+    response.AssertServiceUnavailable()
+    
+    // General server error (500-599)
+    response, err = s.Http(s.T()).Get("/server-error")
+    s.Nil(err)
+    response.AssertServerError()
+}
+```
+
+### Redirect Status Codes
+```go
+// ✅ REQUIRED - Redirect status assertions
+func (s *ExampleTestSuite) TestRedirectStatusCodes() {
+    // 301 Moved Permanently
+    response, err := s.Http(s.T()).Get("/old-url")
+    s.Nil(err)
+    response.AssertMovedPermanently()
+    
+    // 302 Found
+    response, err = s.Http(s.T()).Get("/redirect")
+    s.Nil(err)
+    response.AssertFound()
+    
+    // 304 Not Modified
+    response, err = s.Http(s.T()).WithHeader("If-Modified-Since", "Wed, 21 Oct 2015 07:28:00 GMT").Get("/cached")
+    s.Nil(err)
+    response.AssertNotModified()
+    
+    // 307 Temporary Redirect
+    response, err = s.Http(s.T()).Get("/temp-redirect")
+    s.Nil(err)
+    response.AssertTemporaryRedirect()
+}
+```
+
+## Response Content Assertions
+
+### Content Assertions
+```go
+// ✅ REQUIRED - Content assertions
+func (s *ExampleTestSuite) TestContentAssertions() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    // Assert content contains specific text
+    response.AssertSee([]string{"John Doe"})
+    
+    // Assert content does not contain specific text
+    response.AssertDontSee([]string{"password"})
+    
+    // Assert content contains text in order
+    response.AssertSeeInOrder([]string{"User", "Profile", "Settings"})
+    
+    // Assert content contains text without escaping
+    response.AssertSee([]string{"<div>"}, false)
+}
+```
+
+### Header Assertions
+```go
+// ✅ REQUIRED - Header assertions
+func (s *ExampleTestSuite) TestHeaderAssertions() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    // Assert header exists with value
+    response.AssertHeader("Content-Type", "application/json")
+    
+    // Assert header is missing
+    response.AssertHeaderMissing("X-Custom-Header")
+}
+```
+
+### Cookie Assertions
+```go
+// ✅ REQUIRED - Cookie assertions
+func (s *ExampleTestSuite) TestCookieAssertions() {
+    response, err := s.Http(s.T()).Post("/login", nil)
+    s.Nil(err)
+    
+    // Assert cookie exists with value
+    response.AssertCookie("session_id", "abc123")
+    
+    // Assert cookie is missing
+    response.AssertCookieMissing("old_session")
+    
+    // Assert cookie has expired
+    response.AssertCookieExpired("temp_token")
+    
+    // Assert cookie has not expired
+    response.AssertCookieNotExpired("remember_token")
+}
+```
+
+### JSON Assertions
+```go
+// ✅ REQUIRED - JSON assertions
+func (s *ExampleTestSuite) TestJSONAssertions() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    
+    // Assert JSON contains fragment
+    response.AssertJson(map[string]any{
+        "user": map[string]any{
+            "id":   1,
+            "name": "John Doe",
+        },
+    })
+    
+    // Assert JSON is missing fragment
+    response.AssertJsonMissing(map[string]any{
+        "password": "secret",
+    })
+}
+```
+
+## Advanced HTTP Testing Patterns
+
+### Authentication Testing
+```go
+// ✅ REQUIRED - Authentication testing
+func (s *ExampleTestSuite) TestAuthentication() {
+    // Test unauthenticated request
+    response, err := s.Http(s.T()).Get("/protected")
+    s.Nil(err)
+    response.AssertUnauthorized()
+    
+    // Test authenticated request
+    response, err = s.Http(s.T()).WithHeader("Authorization", "Bearer token123").Get("/protected")
+    s.Nil(err)
+    response.AssertOk()
+    
+    // Test session-based authentication
+    response, err = s.Http(s.T()).WithSession(map[string]any{
+        "user_id": 1,
+        "role":    "user",
+    }).Get("/profile")
+    s.Nil(err)
+    response.AssertOk()
+}
+```
+
+### API Version Testing
+```go
+// ✅ REQUIRED - API version testing
+func (s *ExampleTestSuite) TestAPIVersioning() {
+    // Test v1 API
+    response, err := s.Http(s.T()).WithHeader("Accept", "application/vnd.api+json;version=1").Get("/users")
+    s.Nil(err)
+    response.AssertOk()
+    
+    // Test v2 API
+    response, err = s.Http(s.T()).WithHeader("Accept", "application/vnd.api+json;version=2").Get("/users")
+    s.Nil(err)
+    response.AssertOk()
+}
+```
+
+### Error Handling Testing
+```go
+// ✅ REQUIRED - Error handling testing
+func (s *ExampleTestSuite) TestErrorHandling() {
+    // Test validation errors
+    response, err := s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertUnprocessableEntity()
+    
+    // Test not found errors
+    response, err = s.Http(s.T()).Get("/users/999")
+    s.Nil(err)
+    response.AssertNotFound()
+    
+    // Test server errors
+    response, err = s.Http(s.T()).Get("/error")
+    s.Nil(err)
+    response.AssertInternalServerError()
+}
+```
+
+### Performance Testing
+```go
+// ✅ REQUIRED - Performance testing
+func (s *ExampleTestSuite) TestPerformance() {
+    start := time.Now()
+    
+    response, err := s.Http(s.T()).Get("/users")
+    s.Nil(err)
+    
+    duration := time.Since(start)
+    s.Less(duration, 100*time.Millisecond, "Response should be fast")
+    
+    response.AssertOk()
+}
+```
+
+## HTTP Testing Best Practices
+
+### Test Organization
+```go
+// ✅ REQUIRED - Organized HTTP tests
+type UserAPITestSuite struct {
+    suite.Suite
+    tests.TestCase
+}
+
+func (s *UserAPITestSuite) TestUserCRUD() {
+    // Test user creation
+    s.TestUserCreation()
+    
+    // Test user retrieval
+    s.TestUserRetrieval()
+    
+    // Test user update
+    s.TestUserUpdate()
+    
+    // Test user deletion
+    s.TestUserDeletion()
+}
+
+func (s *UserAPITestSuite) TestUserCreation() {
+    response, err := s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertCreated()
+}
+
+func (s *UserAPITestSuite) TestUserRetrieval() {
+    response, err := s.Http(s.T()).Get("/users/1")
+    s.Nil(err)
+    response.AssertOk()
+}
+```
+
+### Test Data Management
+```go
+// ✅ REQUIRED - Test data management
+func (s *UserAPITestSuite) SetupTest() {
+    // Create test user
+    s.testUser = &models.User{
+        Name:  "Test User",
+        Email: "test@example.com",
+    }
+    facades.Orm().Query().Create(s.testUser)
+}
+
+func (s *UserAPITestSuite) TearDownTest() {
+    // Clean up test data
+    facades.Orm().Query().Delete(s.testUser)
+}
+```
+
+### Test Documentation
+```go
+// ✅ REQUIRED - Documented HTTP tests
+// TestUserCreation tests the user creation endpoint
+// It verifies that a user can be created via POST request
+// and that the response contains the created user data
+func (s *UserAPITestSuite) TestUserCreation() {
+    response, err := s.Http(s.T()).Post("/users", nil)
+    s.Nil(err)
+    response.AssertCreated()
+}
+```
+
+## Best Practices Summary
+
+### Design Principles
+- **Comprehensive Testing**: Test all HTTP endpoints and methods
+- **Response Validation**: Validate all response aspects (status, content, headers)
+- **Error Scenarios**: Test error conditions and edge cases
+- **Authentication**: Test both authenticated and unauthenticated scenarios
+
+### Performance Considerations
+- **Response Time**: Monitor response times in tests
+- **Resource Usage**: Test resource consumption
+- **Concurrent Requests**: Test concurrent request handling
+- **Memory Usage**: Monitor memory usage during tests
+
+### Security Considerations
+- **Input Validation**: Test input validation thoroughly
+- **Authentication**: Test authentication mechanisms
+- **Authorization**: Test authorization rules
+- **Data Protection**: Ensure sensitive data is not exposed
+
+### Reliability Considerations
+- **Error Handling**: Test all error scenarios
+- **Edge Cases**: Test boundary conditions
+- **Data Consistency**: Verify data consistency
+- **State Management**: Test application state management

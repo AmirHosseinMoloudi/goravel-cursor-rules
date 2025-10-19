@@ -1,0 +1,457 @@
+---
+alwaysApply: true
+---
+
+# Goravel Queue System
+
+Based on the [official Goravel queues documentation](https://www.goravel.dev/digging-deeper/queues.html).
+
+## Queue Overview
+
+### Introduction
+- **Background Processing**: Goravel allows you to create queued jobs that can run in the background
+- **Performance Improvement**: Move time-intensive tasks to queues for faster web request responses
+- **Better User Experience**: Provide better user experience by processing tasks asynchronously
+- **Queue Facade**: Access queue functionality through `facades.Queue()`
+
+### Key Concepts
+- **Queue Facade**: Access queue functionality through `facades.Queue()`
+- **Connections vs Queues**: Connections are backend services, queues are different stacks of jobs
+- **Job Classes**: Simple classes with `Signature()` and `Handle()` methods
+- **Queue Workers**: Process jobs from queues with configurable concurrency
+
+## Connections vs. Queues
+
+### Understanding the Difference
+- **Connections**: Backend queue services like Redis, database, etc.
+- **Queues**: Different stacks or piles of queued jobs within a connection
+- **Default Queue**: Each connection has a default queue defined in configuration
+- **Queue Dispatching**: Jobs dispatched without explicit queue go to default queue
+
+### Configuration Example
+```go
+// This job is sent to the default connection's default queue
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{
+    {Type: "int", Value: 1},
+}).Dispatch()
+
+// This job is sent to the default connection's "emails" queue
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{
+    {Type: "int", Value: 1},
+}).OnQueue("emails").Dispatch()
+```
+
+## Queue Drivers
+
+### Sync Driver
+- **Default Driver**: Executes jobs immediately in current process
+- **No Queuing**: Tasks are not pushed to queue but executed directly
+- **Development Use**: Suitable for development and testing
+
+### Database Driver
+- **Database Storage**: Stores jobs in database table
+- **Migration Required**: Create jobs table using migration
+- **Migration File**: `20210101000002_create_jobs_table.go` in `database/migrations/`
+
+### Custom Driver
+- **Interface Implementation**: Implement `Driver` interface in `contracts/queue/driver.go`
+- **Redis Reference**: Use Redis driver implementation as reference
+- **Configuration**: Add custom driver configuration to `config/queue.go`
+
+```go
+// Custom driver configuration
+"connections": map[string]any{
+    "redis": map[string]any{
+        "driver":     "custom",
+        "connection": "default",
+        "queue":      "default",
+        "via": func() (queue.Driver, error) {
+            return redisfacades.Queue("redis")
+        },
+    },
+}
+```
+
+## Creating Jobs
+
+### Generating Job Classes
+```bash
+# Create job using Artisan command
+go run . artisan make:job ProcessPodcast
+
+# Create job in nested folder
+go run . artisan make:job user/ProcessPodcast
+```
+
+### Job Class Structure
+```go
+package jobs
+
+type ProcessPodcast struct {
+}
+
+// Signature The name and signature of the job
+func (r *ProcessPodcast) Signature() string {
+    return "process_podcast"
+}
+
+// Handle Execute the job
+func (r *ProcessPodcast) Handle(args ...any) error {
+    return nil
+}
+```
+
+### Job Retry Support
+```go
+// ShouldRetry determines if the job should be retried based on the error
+func (r *ProcessPodcast) ShouldRetry(err error, attempt int) (retryable bool, delay time.Duration) {
+    return true, 10 * time.Second
+}
+```
+
+### Registering Jobs
+```go
+// app/providers/queue_service_provider.go
+func (receiver *QueueServiceProvider) Jobs() []queue.Job {
+    return []queue.Job{
+        &jobs.Test{},
+    }
+}
+```
+
+## Queue Server Management
+
+### Starting Queue Server
+```go
+// main.go - Start queue server
+package main
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/bootstrap"
+)
+
+func main() {
+    bootstrap.Boot()
+    
+    // Start queue server
+    go func() {
+        if err := facades.Queue().Worker().Run(); err != nil {
+            facades.Log().Errorf("Queue run error: %v", err)
+        }
+    }()
+    
+    select {}
+}
+```
+
+### Queue Worker Configuration
+```go
+// Default configuration (listens to config/queue.go, concurrency: 1)
+go func() {
+    if err := facades.Queue().Worker().Run(); err != nil {
+        facades.Log().Errorf("Queue run error: %v", err)
+    }
+}()
+
+// Custom configuration (redis connection, concurrency: 10, retries: 3)
+go func() {
+    if err := facades.Queue().Worker(queue.Args{
+        Connection: "redis",
+        Queue:      "processing",
+        Concurrent: 10,
+        Tries:      3,
+    }).Run(); err != nil {
+        facades.Log().Errorf("Queue run error: %v", err)
+    }
+}()
+```
+
+### Stopping Queue Server
+```go
+// Graceful shutdown - waits for current tasks to complete
+err := facades.Queue().Worker().Shutdown()
+```
+
+## Dispatching Jobs
+
+### Basic Job Dispatching
+```go
+package controllers
+
+import (
+    "github.com/goravel/framework/contracts/queue"
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+    "goravel/app/jobs"
+)
+
+type UserController struct {
+}
+
+func (r *UserController) Show(ctx http.Context) {
+    err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).Dispatch()
+    if err != nil {
+        // Handle error
+    }
+}
+```
+
+### Synchronous Dispatching
+```go
+// Execute job immediately in current process
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).DispatchSync()
+if err != nil {
+    // Handle error
+}
+```
+
+### Job Chaining
+```go
+// Execute jobs in sequence, stop if any fails
+err := facades.Queue().Chain([]queue.Jobs{
+    {
+        Job: &jobs.Test{},
+        Args: []queue.Arg{
+            {Type: "int", Value: 1},
+        },
+    },
+    {
+        Job: &jobs.Test1{},
+        Args: []queue.Arg{
+            {Type: "int", Value: 2},
+        },
+    },
+}).Dispatch()
+```
+
+### Delayed Dispatching
+```go
+// Delay job execution by 100 seconds
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).
+    Delay(time.Now().Add(100 * time.Second)).
+    Dispatch()
+```
+
+## Customizing Queue & Connection
+
+### Dispatching to Particular Queue
+```go
+// Dispatch to specific queue
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).
+    OnQueue("processing").
+    Dispatch()
+```
+
+### Dispatching to Particular Connection
+```go
+// Dispatch to specific connection
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).
+    OnConnection("sync").
+    Dispatch()
+```
+
+### Chaining Queue and Connection
+```go
+// Dispatch to specific connection and queue
+err := facades.Queue().Job(&jobs.Test{}, []queue.Arg{}).
+    OnConnection("sync").
+    OnQueue("processing").
+    Dispatch()
+```
+
+## Failed Job Management
+
+### Viewing Failed Jobs
+```bash
+# View all failed jobs
+./artisan queue:failed
+```
+
+### Retrying Failed Jobs
+```bash
+# Retry single job by UUID
+./artisan queue:retry 4427387e-c75a-4295-afb3-2f3d0e410494
+
+# Retry multiple jobs
+./artisan queue:retry 4427387e-c75a-4295-afb3-2f3d0e410494 eafdd963-a8b7-4aca-9421-b376ed9f4382
+
+# Retry failed jobs for specific connection
+./artisan queue:retry --connection=redis
+
+# Retry failed jobs for specific queue
+./artisan queue:retry --queue=processing
+
+# Retry failed jobs for specific connection and queue
+./artisan queue:retry --connection=redis --queue=processing
+
+# Retry all failed jobs
+./artisan queue:retry all
+```
+
+## Supported Queue Argument Types
+
+### Basic Types
+- **bool**: Boolean values
+- **int, int8, int16, int32, int64**: Integer types
+- **uint, uint8, uint16, uint32, uint64**: Unsigned integer types
+- **float32, float64**: Floating point types
+- **string**: String values
+
+### Slice Types
+- **[]bool**: Boolean slices
+- **[]int, []int8, []int16, []int32, []int64**: Integer slices
+- **[]uint, []uint8, []uint16, []uint32, []uint64**: Unsigned integer slices
+- **[]float32, []float64**: Floating point slices
+- **[]string**: String slices
+
+## Queue Best Practices
+
+### Design Principles
+- **Job Granularity**: Keep jobs focused and atomic
+- **Error Handling**: Implement proper error handling in jobs
+- **Retry Logic**: Use `ShouldRetry` method for intelligent retry logic
+- **Resource Management**: Clean up resources in job handlers
+
+### Performance Considerations
+- **Concurrency**: Configure appropriate concurrency levels
+- **Queue Separation**: Use different queues for different job types
+- **Monitoring**: Monitor queue performance and failed jobs
+- **Resource Usage**: Monitor memory and CPU usage of queue workers
+
+### Security Considerations
+- **Input Validation**: Validate all job arguments
+- **Access Control**: Implement proper access control for job dispatching
+- **Sensitive Data**: Avoid passing sensitive data in job arguments
+- **Audit Logging**: Log job execution for security auditing
+
+## Common Queue Patterns
+
+### Email Processing
+```go
+// Email job for sending notifications
+type SendEmailJob struct {
+    UserID  int
+    Subject string
+    Body    string
+}
+
+func (j *SendEmailJob) Signature() string {
+    return "send_email"
+}
+
+func (j *SendEmailJob) Handle(args ...any) error {
+    // Send email logic
+    return nil
+}
+
+// Dispatch email job
+err := facades.Queue().Job(&jobs.SendEmailJob{}, []queue.Arg{
+    {Type: "int", Value: userID},
+    {Type: "string", Value: subject},
+    {Type: "string", Value: body},
+}).OnQueue("emails").Dispatch()
+```
+
+### File Processing
+```go
+// File processing job
+type ProcessFileJob struct {
+    FilePath string
+    UserID   int
+}
+
+func (j *ProcessFileJob) Signature() string {
+    return "process_file"
+}
+
+func (j *ProcessFileJob) Handle(args ...any) error {
+    // Process file logic
+    return nil
+}
+
+// Dispatch file processing job
+err := facades.Queue().Job(&jobs.ProcessFileJob{}, []queue.Arg{
+    {Type: "string", Value: filePath},
+    {Type: "int", Value: userID},
+}).OnQueue("processing").Dispatch()
+```
+
+### Data Synchronization
+```go
+// Data sync job
+type SyncDataJob struct {
+    SourceID int
+    TargetID int
+}
+
+func (j *SyncDataJob) Signature() string {
+    return "sync_data"
+}
+
+func (j *SyncDataJob) Handle(args ...any) error {
+    // Sync data logic
+    return nil
+}
+
+// Dispatch sync job with delay
+err := facades.Queue().Job(&jobs.SyncDataJob{}, []queue.Arg{
+    {Type: "int", Value: sourceID},
+    {Type: "int", Value: targetID},
+}).Delay(time.Now().Add(5 * time.Minute)).Dispatch()
+```
+
+## Development Guidelines
+
+### Queue Organization
+- **Job Classes**: Organize job classes by functionality
+- **Queue Naming**: Use descriptive queue names
+- **Error Handling**: Implement comprehensive error handling
+- **Testing**: Test job functionality thoroughly
+
+### Testing Queues
+```go
+// Test queue job execution
+func TestProcessPodcastJob(t *testing.T) {
+    job := &jobs.ProcessPodcast{}
+    
+    // Test job signature
+    assert.Equal(t, "process_podcast", job.Signature())
+    
+    // Test job execution
+    err := job.Handle("test", "args")
+    assert.NoError(t, err)
+}
+```
+
+### Monitoring and Maintenance
+- **Queue Metrics**: Monitor queue performance metrics
+- **Failed Job Tracking**: Track and analyze failed jobs
+- **Resource Monitoring**: Monitor queue worker resource usage
+- **Performance Optimization**: Optimize queue performance
+
+## Best Practices
+
+### Queue Design
+- **Atomic Operations**: Keep jobs atomic and focused
+- **Error Recovery**: Implement proper error recovery mechanisms
+- **Resource Cleanup**: Clean up resources in job handlers
+- **Logging**: Log job execution for debugging
+
+### Performance
+- **Concurrency Tuning**: Tune concurrency based on workload
+- **Queue Separation**: Separate different job types into different queues
+- **Resource Management**: Manage resources efficiently
+- **Monitoring**: Monitor queue performance continuously
+
+### Reliability
+- **Error Handling**: Implement comprehensive error handling
+- **Retry Logic**: Use intelligent retry logic
+- **Dead Letter Queues**: Implement dead letter queues for failed jobs
+- **Monitoring**: Monitor queue health and performance
+
+### Security
+- **Input Validation**: Validate all job inputs
+- **Access Control**: Implement proper access control
+- **Sensitive Data**: Handle sensitive data securely
+- **Audit Logging**: Log job execution for security auditing

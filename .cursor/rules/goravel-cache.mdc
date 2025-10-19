@@ -1,0 +1,530 @@
+---
+alwaysApply: true
+---
+
+# Goravel Cache System
+
+Based on the [official Goravel cache documentation](https://www.goravel.dev/digging-deeper/cache.html).
+
+## Cache Overview
+
+### Introduction
+- **Expandable Cache Module**: Operated using `facades.Cache()` for high-performance data storage
+- **Multiple Drivers**: Support for memory, Redis, and custom cache drivers
+- **Atomic Locks**: Distributed locks without race conditions
+- **Context Support**: Cache operations with HTTP context injection
+
+### Key Concepts
+- **Cache Facade**: Access cache functionality through `facades.Cache()`
+- **Cache Drivers**: Multiple drivers (memory, Redis, custom)
+- **Atomic Locks**: Distributed locking mechanism
+- **Context Injection**: Add HTTP context to cache operations
+
+## Configuration
+
+### Cache Configuration
+```go
+// config/cache.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("cache", map[string]interface{}{
+        // Cache Configuration
+        //
+        // Configure the default cache store
+        "default": config.Env("CACHE_STORE", "memory"),
+
+        // Configure cache stores
+        "stores": map[string]any{
+            "memory": map[string]any{
+                "driver": "memory",
+            },
+            "redis": map[string]any{
+                "driver": "redis",
+                "connection": "default",
+            },
+            "custom": map[string]any{
+                "driver": "custom",
+                "via":    &CustomCacheDriver{},
+            },
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Cache configuration
+CACHE_STORE=memory
+CACHE_DRIVER=redis
+```
+
+## Cache Usage
+
+### Context Injection
+```go
+// Inject HTTP context into cache operations
+facades.Cache().WithContext(ctx).Get("key")
+```
+
+### Accessing Multiple Cache Stores
+```go
+// Access different cache stores
+value := facades.Cache().Store("redis").Get("foo")
+value := facades.Cache().Store("memory").Get("bar")
+```
+
+### Retrieving Items From The Cache
+```go
+// Basic retrieval with default values
+value := facades.Cache().Get("goravel", "default")
+value := facades.Cache().GetBool("goravel", true)
+value := facades.Cache().GetInt("goravel", 1)
+value := facades.Cache().GetString("goravel", "default")
+
+// Retrieval with function as default
+value := facades.Cache().Get("goravel", func() any {
+    return "default"
+})
+```
+
+### Checking For Item Existence
+```go
+// Check if cache item exists
+exists := facades.Cache().Has("goravel")
+```
+
+### Incrementing / Decrementing Values
+```go
+// Increment cache values
+facades.Cache().Increment("key")
+facades.Cache().Increment("key", 5)
+
+// Decrement cache values
+facades.Cache().Decrement("key")
+facades.Cache().Decrement("key", 3)
+```
+
+### Retrieve & Store Operations
+```go
+// Remember with TTL
+value, err := facades.Cache().Remember("goravel", 5*time.Second, func() (any, error) {
+    return "goravel", nil
+})
+
+// Remember forever
+value, err := facades.Cache().RememberForever("goravel", func() (any, error) {
+    return "default", nil
+})
+```
+
+### Retrieve & Delete Operations
+```go
+// Pull (get and delete)
+value := facades.Cache().Pull("goravel", "default")
+```
+
+### Storing Items In The Cache
+```go
+// Store with TTL
+err := facades.Cache().Put("goravel", "value", 5*time.Second)
+
+// Store forever (TTL = 0)
+err := facades.Cache().Put("goravel", "value", 0)
+```
+
+### Store If Not Present
+```go
+// Add only if not exists
+success := facades.Cache().Add("goravel", "value", 5*time.Second)
+```
+
+### Storing Items Forever
+```go
+// Store permanently
+success := facades.Cache().Forever("goravel", "value")
+```
+
+### Removing Items From The Cache
+```go
+// Remove specific item
+success := facades.Cache().Forget("goravel")
+
+// Clear all cache
+success := facades.Cache().Flush()
+```
+
+## Atomic Locks
+
+### Managing Locks
+```go
+// Create and acquire lock
+lock := facades.Cache().Lock("foo", 10*time.Second)
+
+if lock.Get() {
+    // Lock acquired for 10 seconds
+    // Perform critical section operations
+    lock.Release()
+}
+```
+
+### Lock with Closure
+```go
+// Automatic lock release with closure
+facades.Cache().Lock("foo").Get(func() {
+    // Lock acquired for 10 seconds and automatically released
+    // Perform critical section operations
+})
+```
+
+### Blocking Locks
+```go
+// Wait for lock with timeout
+lock := facades.Cache().Lock("foo", 10*time.Second)
+if lock.Block(5*time.Second) {
+    // Lock acquired after waiting maximum 5 seconds
+    lock.Release()
+}
+
+// Blocking lock with closure
+facades.Cache().Lock("foo", 10*time.Second).Block(5*time.Second, func() {
+    // Lock acquired after waiting maximum 5 seconds
+    // Automatically released after closure execution
+})
+```
+
+### Force Release Locks
+```go
+// Force release lock without respecting owner
+facades.Cache().Lock("processing").ForceRelease()
+```
+
+## Custom Cache Drivers
+
+### Configuration
+```go
+// config/cache.go
+"stores": map[string]interface{}{
+    "memory": map[string]any{
+        "driver": "memory",
+    },
+    "custom": map[string]interface{}{
+        "driver": "custom",
+        "via":    &CustomCacheDriver{},
+    },
+}
+```
+
+### Implement Custom Driver
+```go
+// app/extensions/custom_cache_driver.go
+package extensions
+
+import (
+    "context"
+    "time"
+    "github.com/goravel/framework/contracts/cache"
+)
+
+type CustomCacheDriver struct {
+    // Custom driver implementation
+}
+
+// Implement cache.Driver interface
+func (d *CustomCacheDriver) Add(key string, value any, t time.Duration) bool {
+    // Add item if key doesn't exist
+    return true
+}
+
+func (d *CustomCacheDriver) Decrement(key string, value ...int) (int, error) {
+    // Decrement value
+    return 0, nil
+}
+
+func (d *CustomCacheDriver) Forever(key string, value any) bool {
+    // Store item forever
+    return true
+}
+
+func (d *CustomCacheDriver) Forget(key string) bool {
+    // Remove item
+    return true
+}
+
+func (d *CustomCacheDriver) Flush() bool {
+    // Clear all items
+    return true
+}
+
+func (d *CustomCacheDriver) Get(key string, def ...any) any {
+    // Get item with default
+    return def[0]
+}
+
+func (d *CustomCacheDriver) GetBool(key string, def ...bool) bool {
+    // Get boolean value
+    return def[0]
+}
+
+func (d *CustomCacheDriver) GetInt(key string, def ...int) int {
+    // Get integer value
+    return def[0]
+}
+
+func (d *CustomCacheDriver) GetInt64(key string, def ...int64) int64 {
+    // Get int64 value
+    return def[0]
+}
+
+func (d *CustomCacheDriver) GetString(key string, def ...string) string {
+    // Get string value
+    return def[0]
+}
+
+func (d *CustomCacheDriver) Has(key string) bool {
+    // Check if key exists
+    return false
+}
+
+func (d *CustomCacheDriver) Increment(key string, value ...int) (int, error) {
+    // Increment value
+    return 0, nil
+}
+
+func (d *CustomCacheDriver) Lock(key string, t ...time.Duration) cache.Lock {
+    // Create lock
+    return &CustomLock{}
+}
+
+func (d *CustomCacheDriver) Put(key string, value any, t time.Duration) error {
+    // Store item with TTL
+    return nil
+}
+
+func (d *CustomCacheDriver) Pull(key string, def ...any) any {
+    // Get and delete item
+    return def[0]
+}
+
+func (d *CustomCacheDriver) Remember(key string, ttl time.Duration, callback func() (any, error)) (any, error) {
+    // Remember with callback
+    return callback()
+}
+
+func (d *CustomCacheDriver) RememberForever(key string, callback func() (any, error)) (any, error) {
+    // Remember forever with callback
+    return callback()
+}
+
+func (d *CustomCacheDriver) WithContext(ctx context.Context) cache.Driver {
+    // Return driver with context
+    return d
+}
+
+type CustomLock struct {
+    // Custom lock implementation
+}
+
+func (l *CustomLock) Get() bool {
+    // Acquire lock
+    return true
+}
+
+func (l *CustomLock) Block(timeout time.Duration) bool {
+    // Block until lock acquired or timeout
+    return true
+}
+
+func (l *CustomLock) Release() {
+    // Release lock
+}
+
+func (l *CustomLock) ForceRelease() {
+    // Force release lock
+}
+```
+
+## Common Cache Patterns
+
+### Database Query Caching
+```go
+// Cache database queries
+func (r *UserRepository) FindByID(id int) (*User, error) {
+    var user User
+    
+    // Try to get from cache first
+    if facades.Cache().Has(fmt.Sprintf("user:%d", id)) {
+        userData := facades.Cache().Get(fmt.Sprintf("user:%d", id))
+        return userData.(*User), nil
+    }
+    
+    // Query database
+    err := r.db.Where("id = ?", id).First(&user).Error
+    if err != nil {
+        return nil, err
+    }
+    
+    // Cache the result
+    facades.Cache().Put(fmt.Sprintf("user:%d", id), &user, 1*time.Hour)
+    
+    return &user, nil
+}
+```
+
+### Cache with Remember Pattern
+```go
+// Use Remember for automatic caching
+func (s *UserService) GetActiveUsers() ([]User, error) {
+    var users []User
+    
+    result, err := facades.Cache().Remember("active_users", 30*time.Minute, func() (any, error) {
+        // This function only executes if cache miss
+        return s.userRepo.GetActiveUsers()
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return result.([]User), nil
+}
+```
+
+### Cache Invalidation
+```go
+// Invalidate cache on data changes
+func (s *UserService) UpdateUser(user *User) error {
+    // Update user in database
+    err := s.userRepo.Update(user)
+    if err != nil {
+        return err
+    }
+    
+    // Invalidate related cache
+    facades.Cache().Forget(fmt.Sprintf("user:%d", user.ID))
+    facades.Cache().Forget("active_users")
+    
+    return nil
+}
+```
+
+### Rate Limiting with Cache
+```go
+// Rate limiting using cache
+func (m *RateLimitMiddleware) CheckRateLimit(ctx http.Context) bool {
+    ip := ctx.Request().Ip()
+    key := fmt.Sprintf("rate_limit:%s", ip)
+    
+    count := facades.Cache().GetInt(key, 0)
+    if count >= 100 { // 100 requests per minute
+        return false
+    }
+    
+    // Increment counter
+    facades.Cache().Increment(key)
+    facades.Cache().Put(key, count+1, 1*time.Minute)
+    
+    return true
+}
+```
+
+### Session Caching
+```go
+// Cache session data
+func (s *SessionService) GetUserSession(userID int) (*Session, error) {
+    var session Session
+    
+    result, err := facades.Cache().Remember(fmt.Sprintf("session:%d", userID), 2*time.Hour, func() (any, error) {
+        return s.sessionRepo.FindByUserID(userID)
+    })
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return result.(*Session), nil
+}
+```
+
+## Cache Best Practices
+
+### Design Principles
+- **Cache Strategy**: Use appropriate cache strategies (write-through, write-behind, etc.)
+- **TTL Management**: Set appropriate time-to-live values
+- **Cache Keys**: Use descriptive and consistent cache keys
+- **Memory Management**: Monitor cache memory usage
+
+### Performance Considerations
+- **Cache Hit Ratio**: Monitor cache hit ratios
+- **Memory Usage**: Monitor cache memory consumption
+- **Network Latency**: Consider network latency for distributed caches
+- **Serialization**: Optimize data serialization/deserialization
+
+### Security Considerations
+- **Data Encryption**: Encrypt sensitive cached data
+- **Access Control**: Implement proper cache access control
+- **Cache Poisoning**: Prevent cache poisoning attacks
+- **Data Validation**: Validate cached data before use
+
+## Development Guidelines
+
+### Cache Organization
+- **Key Naming**: Use consistent cache key naming conventions
+- **Namespace**: Use namespaces to organize cache keys
+- **Versioning**: Implement cache versioning for schema changes
+- **Documentation**: Document cache usage and strategies
+
+### Testing Cache
+```go
+// Test cache functionality
+func TestCacheOperations(t *testing.T) {
+    // Test cache put and get
+    err := facades.Cache().Put("test_key", "test_value", 1*time.Minute)
+    assert.NoError(t, err)
+    
+    value := facades.Cache().Get("test_key", "")
+    assert.Equal(t, "test_value", value)
+    
+    // Test cache expiration
+    time.Sleep(2 * time.Minute)
+    value = facades.Cache().Get("test_key", "")
+    assert.Equal(t, "", value)
+}
+```
+
+### Monitoring and Debugging
+- **Cache Metrics**: Monitor cache performance metrics
+- **Hit/Miss Ratios**: Track cache hit and miss ratios
+- **Memory Usage**: Monitor cache memory consumption
+- **Error Tracking**: Track cache-related errors
+
+## Best Practices
+
+### Cache Design
+- **Appropriate TTL**: Set appropriate time-to-live values
+- **Cache Warming**: Implement cache warming strategies
+- **Cache Invalidation**: Implement proper cache invalidation
+- **Memory Management**: Monitor and manage cache memory
+
+### Performance
+- **Efficient Serialization**: Use efficient serialization methods
+- **Batch Operations**: Use batch operations when possible
+- **Connection Pooling**: Use connection pooling for distributed caches
+- **Monitoring**: Monitor cache performance continuously
+
+### Security
+- **Data Encryption**: Encrypt sensitive cached data
+- **Access Control**: Implement proper access control
+- **Input Validation**: Validate all cache inputs
+- **Audit Logging**: Log cache access for security auditing
+
+### Reliability
+- **Fallback Strategies**: Implement fallback strategies for cache failures
+- **Error Handling**: Handle cache errors gracefully
+- **Data Consistency**: Ensure data consistency between cache and source
+- **Backup Strategies**: Implement cache backup strategies

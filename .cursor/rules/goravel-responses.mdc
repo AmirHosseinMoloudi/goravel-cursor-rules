@@ -1,0 +1,469 @@
+---
+alwaysApply: true
+---
+
+# Goravel HTTP Responses
+
+Based on the [official Goravel HTTP response documentation](https://www.goravel.dev/the-basics/response.html).
+
+## Response Overview
+
+### Introduction
+- **Response Handling**: Use `ctx.Response()` for HTTP responses in controllers
+- **Multiple Formats**: Support for string, JSON, file, stream, and custom responses
+- **Status Codes**: Proper HTTP status code handling
+- **Headers and Cookies**: Full control over response headers and cookies
+
+### Key Concepts
+- **Response Context**: `ctx.Response()` provides access to response methods
+- **Status Codes**: HTTP status codes for different response types
+- **Content Types**: Various content types (text, JSON, HTML, files)
+- **Response Streaming**: Support for streaming responses
+
+## Basic Response Types
+
+### String Response
+```go
+import "github.com/goravel/framework/contracts/http"
+
+// Simple string response
+ctx.Response().String(http.StatusOK, "Hello Goravel")
+
+// String with custom status code
+ctx.Response().String(http.StatusCreated, "Resource created")
+```
+
+### JSON Response
+```go
+import "github.com/goravel/framework/contracts/http"
+
+// JSON response with map
+ctx.Response().Json(http.StatusOK, http.Json{
+    "Hello": "Goravel",
+})
+
+// JSON response with struct
+ctx.Response().Json(http.StatusOK, struct {
+    ID     uint   `json:"id"`
+    Name   string `json:"name"`
+}{
+    ID:   1,
+    Name: "Goravel",
+})
+
+// JSON response with custom data
+ctx.Response().Json(http.StatusOK, map[string]any{
+    "message": "Success",
+    "data":    userData,
+})
+```
+
+### Custom Response
+```go
+// Custom content type response
+ctx.Response().Data(http.StatusOK, "text/html; charset=utf-8", []byte("<b>Goravel</b>"))
+
+// Custom binary response
+ctx.Response().Data(http.StatusOK, "application/octet-stream", binaryData)
+```
+
+## File Responses
+
+### Response File
+```go
+import "net/http"
+
+// Serve static file
+ctx.Response().File("./public/logo.png")
+
+// Serve file with custom path
+ctx.Response().File("./public/uploads/document.pdf")
+```
+
+### Download File
+```go
+import "net/http"
+
+// Download file with custom filename
+ctx.Response().Download("./public/logo.png", "1.png")
+
+// Download file with original name
+ctx.Response().Download("./public/uploads/report.pdf", "monthly-report.pdf")
+```
+
+## Response Headers
+
+### Attach Headers
+```go
+import "github.com/goravel/framework/contracts/http"
+
+// Add custom header
+ctx.Response().Header("Content-Type", "application/json").Json(http.StatusOK, data)
+
+// Add multiple headers
+ctx.Response().Header("X-Custom-Header", "value").
+    Header("Cache-Control", "no-cache").
+    String(http.StatusOK, "Response with headers")
+```
+
+### Common Headers
+```go
+// CORS headers
+ctx.Response().Header("Access-Control-Allow-Origin", "*").
+    Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE").
+    Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+// Cache headers
+ctx.Response().Header("Cache-Control", "public, max-age=3600").
+    Header("ETag", "\"abc123\"")
+
+// Security headers
+ctx.Response().Header("X-Content-Type-Options", "nosniff").
+    Header("X-Frame-Options", "DENY")
+```
+
+## Cookie Management
+
+### Set Cookie
+```go
+import (
+    "time"
+    "github.com/goravel/framework/contracts/http"
+)
+
+// Basic cookie
+ctx.Response().Cookie(http.Cookie{
+    Name:  "session",
+    Value: "abc123",
+    Path:  "/",
+})
+
+// Advanced cookie with options
+ctx.Response().Cookie(http.Cookie{
+    Name:     "auth_token",
+    Value:    "jwt_token_here",
+    Path:     "/",
+    Domain:   "goravel.dev",
+    Expires:  time.Now().Add(24 * time.Hour),
+    Secure:   true,
+    HttpOnly: true,
+    SameSite: http.SameSiteStrictMode,
+})
+
+// Session cookie
+ctx.Response().Cookie(http.Cookie{
+    Name:   "user_preferences",
+    Value:  "theme=dark",
+    Path:   "/",
+    MaxAge: 3600, // 1 hour
+})
+```
+
+### Expire Cookie
+```go
+// Remove cookie by setting it to expire
+ctx.Response().WithoutCookie("session")
+
+// Remove multiple cookies
+ctx.Response().WithoutCookie("auth_token").
+    WithoutCookie("user_preferences")
+```
+
+## Response Status Codes
+
+### Success Responses
+```go
+// Success response (200 OK)
+ctx.Response().Success().String("Hello Goravel")
+
+// Success with JSON
+ctx.Response().Success().Json(http.Json{
+    "message": "Operation successful",
+    "data":    result,
+})
+
+// Created response (201)
+ctx.Response().Status(http.StatusCreated).Json(http.Json{
+    "message": "Resource created",
+    "id":      newResourceID,
+})
+```
+
+### Custom Status Codes
+```go
+// Custom status code
+ctx.Response().Status(http.StatusOK).Json(http.Json{
+    "hello": "Goravel",
+})
+
+// Not Found
+ctx.Response().Status(http.StatusNotFound).Json(http.Json{
+    "error": "Resource not found",
+})
+
+// Unauthorized
+ctx.Response().Status(http.StatusUnauthorized).Json(http.Json{
+    "error": "Authentication required",
+})
+```
+
+## Streaming Responses
+
+### Return Stream
+```go
+// Stream response for large data
+ctx.Response().Stream(http.StatusCreated, func(w http.StreamWriter) error {
+    data := []string{"a", "b", "c"}
+    for _, item := range data {
+        if _, err := w.Write([]byte(item + "\n")); err != nil {
+            return err
+        }
+
+        if err := w.Flush(); err != nil {
+            return err
+        }
+
+        time.Sleep(1 * time.Second)
+    }
+
+    return nil
+})
+```
+
+### Streaming Use Cases
+```go
+// Stream large file
+ctx.Response().Stream(http.StatusOK, func(w http.StreamWriter) error {
+    file, err := os.Open("large-file.txt")
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    _, err = io.Copy(w, file)
+    return err
+})
+
+// Stream JSON array
+ctx.Response().Stream(http.StatusOK, func(w http.StreamWriter) error {
+    w.Write([]byte("["))
+    for i, item := range largeDataSet {
+        if i > 0 {
+            w.Write([]byte(","))
+        }
+        jsonData, _ := json.Marshal(item)
+        w.Write(jsonData)
+        w.Flush()
+    }
+    w.Write([]byte("]"))
+    return nil
+})
+```
+
+## Redirects
+
+### Redirect Response
+```go
+// Permanent redirect
+ctx.Response().Redirect(http.StatusMovedPermanently, "https://goravel.dev")
+
+// Temporary redirect
+ctx.Response().Redirect(http.StatusFound, "/new-location")
+
+// Redirect with status code
+ctx.Response().Redirect(http.StatusSeeOther, "/dashboard")
+```
+
+### Redirect Patterns
+```go
+// Redirect after form submission
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Process form data
+    user := c.userService.Create(ctx.Request().All())
+    
+    // Redirect to show page
+    return ctx.Response().Redirect(http.StatusFound, fmt.Sprintf("/users/%d", user.ID))
+}
+
+// Redirect with flash message
+func (c *AuthController) Login(ctx http.Context) http.Response {
+    // Authenticate user
+    if c.authService.Login(ctx.Request().All()) {
+        return ctx.Response().Redirect(http.StatusFound, "/dashboard")
+    }
+    
+    return ctx.Response().Redirect(http.StatusFound, "/login?error=invalid_credentials")
+}
+```
+
+## No Content Responses
+
+### No Content Response
+```go
+// No content (204)
+ctx.Response().NoContent()
+
+// No content with specific status
+ctx.Response().NoContent(http.StatusOK)
+
+// No content for DELETE operations
+func (c *UserController) Destroy(ctx http.Context) http.Response {
+    c.userService.Delete(ctx.Request().RouteInt("id"))
+    return ctx.Response().NoContent()
+}
+```
+
+## Response Information
+
+### Get Response Data
+```go
+// Get response information (commonly used in middleware)
+origin := ctx.Response().Origin()
+
+// Access response methods
+body := origin.Body()     // Get response data
+header := origin.Header() // Get response header
+size := origin.Size()    // Get response size
+status := origin.Status() // Get response status
+```
+
+### Middleware Response Handling
+```go
+// Logging middleware
+func LoggingMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        ctx.Request().Next()
+        
+        // Log response information
+        response := ctx.Response().Origin()
+        facades.Log().Info("Response sent", map[string]any{
+            "status": response.Status(),
+            "size":   response.Size(),
+        })
+    }
+}
+```
+
+## Common Response Patterns
+
+### API Response Structure
+```go
+// Standard API response
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.FindByID(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "data": user,
+    })
+}
+
+// Paginated response
+func (c *UserController) Index(ctx http.Context) http.Response {
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    users, total, err := c.userService.Paginate(page, limit)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "data": users,
+        "pagination": map[string]any{
+            "page":  page,
+            "limit": limit,
+            "total": total,
+        },
+    })
+}
+```
+
+### Error Response Patterns
+```go
+// Validation error response
+func (c *UserController) Store(ctx http.Context) http.Response {
+    if err := c.validator.Validate(ctx.Request().All()); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Validation failed",
+            "details": err.Error(),
+        })
+    }
+    
+    // Continue with creation
+}
+
+// Server error response
+func (c *UserController) Update(ctx http.Context) http.Response {
+    if err := c.userService.Update(ctx.Request().All()); err != nil {
+        facades.Log().Error("Failed to update user", map[string]any{"error": err})
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Internal server error",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "User updated successfully",
+    })
+}
+```
+
+## Response Best Practices
+
+### Design Principles
+- **Consistent Structure**: Use consistent response structure across API
+- **Proper Status Codes**: Use appropriate HTTP status codes
+- **Error Handling**: Provide meaningful error messages
+- **Content Types**: Set correct content types for different responses
+
+### Performance Considerations
+- **Streaming**: Use streaming for large responses
+- **Compression**: Implement response compression
+- **Caching**: Set appropriate cache headers
+- **Size Optimization**: Optimize response sizes
+
+### Security Considerations
+- **Headers**: Set security headers appropriately
+- **Cookies**: Use secure cookie options
+- **Content Validation**: Validate response content
+- **Error Information**: Don't expose sensitive information in errors
+
+## Development Guidelines
+
+### Response Organization
+- **Consistent Format**: Maintain consistent response format
+- **Error Handling**: Implement comprehensive error handling
+- **Logging**: Log important response information
+- **Documentation**: Document API response formats
+
+### Testing Responses
+- **Status Code Testing**: Test response status codes
+- **Content Testing**: Test response content
+- **Header Testing**: Test response headers
+- **Integration Testing**: Test complete response flow
+
+## Best Practices
+
+### Response Design
+- **RESTful Responses**: Follow RESTful response patterns
+- **Error Messages**: Provide clear, actionable error messages
+- **Status Codes**: Use appropriate HTTP status codes
+- **Content Types**: Set correct content types
+
+### Security
+- **Headers**: Implement security headers
+- **Cookies**: Use secure cookie settings
+- **Error Handling**: Don't expose sensitive information
+- **Validation**: Validate all response data
+
+### Performance
+- **Streaming**: Use streaming for large data
+- **Compression**: Implement response compression
+- **Caching**: Set appropriate cache headers
+- **Optimization**: Optimize response generation

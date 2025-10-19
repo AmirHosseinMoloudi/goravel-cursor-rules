@@ -1,0 +1,67 @@
+---
+alwaysApply: true
+---
+# Security Guidelines for Goravel
+
+## Input Validation
+- Validate all user inputs using request classes
+- Implement proper sanitization for user data
+- Use whitelist validation where possible
+- Validate file uploads thoroughly
+- Implement CSRF protection for forms
+
+## Authentication & Authorization
+- Use secure password hashing (bcrypt, scrypt)
+- Implement proper session management
+- Use JWT tokens for API authentication
+- Implement role-based access control (RBAC)
+- Use middleware for route protection
+
+## Database Security
+- Use parameterized queries to prevent SQL injection
+- Implement proper database permissions
+- Use database encryption for sensitive data
+- Implement audit logging for data changes
+- Use connection pooling securely
+
+## API Security
+- Implement rate limiting for API endpoints
+- Use HTTPS for all communications
+- Implement proper CORS policies
+- Use API keys and tokens securely
+- Implement request/response logging
+
+## File Upload Security
+- Validate file types and sizes
+- Scan uploaded files for malware
+- Store files outside web root
+- Implement proper file permissions
+- Use secure file naming conventions
+
+## Environment Security
+- Never commit secrets to version control
+- Use environment variables for sensitive data
+- Implement proper secret management
+- Use different configurations for different environments
+- Implement proper logging without exposing secrets
+
+## Dependency Security
+- Keep dependencies updated
+- Use dependency scanning tools
+- Implement proper dependency management
+- Use trusted package sources
+- Monitor for security vulnerabilities
+
+## Infrastructure Security
+- Use Docker security best practices
+- Implement proper container scanning
+- Use secure base images
+- Implement network security policies
+- Use proper secret management in containers
+
+## Monitoring & Incident Response
+- Implement security monitoring
+- Log security events appropriately
+- Implement incident response procedures
+- Use security scanning tools
+- Implement proper backup and recovery procedures

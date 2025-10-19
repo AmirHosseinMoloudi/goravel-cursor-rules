@@ -1,0 +1,394 @@
+---
+alwaysApply: true
+---
+
+# Goravel Middleware System
+
+Based on the [official Goravel middleware documentation](https://www.goravel.dev/the-basics/middleware.html).
+
+## Middleware Overview
+
+### Introduction
+- **Request Filtering**: Convenient mechanism for inspecting and filtering HTTP requests
+- **Cross-cutting Concerns**: Handle authentication, logging, CORS, rate limiting
+- **Request Pipeline**: Middleware processes requests before reaching controllers
+- **Response Pipeline**: Middleware can also process responses after controller execution
+
+### Key Concepts
+- **Request Inspection**: Examine incoming HTTP requests
+- **Request Filtering**: Filter or modify requests before processing
+- **Response Processing**: Process responses after controller execution
+- **Pipeline Order**: Middleware execution order matters
+
+## Defining Middleware
+
+### Basic Middleware Structure
+```go
+package middleware
+
+import (
+    "github.com/goravel/framework/contracts/http"
+)
+
+func Auth() http.Middleware {
+    return func(ctx http.Context) {
+        // Middleware logic here
+        ctx.Request().Next()
+    }
+}
+```
+
+### Middleware Components
+- **Function Signature**: Returns `http.Middleware` type
+- **Context Parameter**: `http.Context` provides request/response access
+- **Next() Call**: `ctx.Request().Next()` continues to next middleware/controller
+- **Return Value**: Middleware function that processes the request
+
+### Common Middleware Patterns
+```go
+// Authentication middleware
+func Auth() http.Middleware {
+    return func(ctx http.Context) {
+        token := ctx.Request().Header("Authorization")
+        if !isValidToken(token) {
+            ctx.Request().Abort(http.StatusUnauthorized)
+            return
+        }
+        ctx.Request().Next()
+    }
+}
+
+// Logging middleware
+func Logging() http.Middleware {
+    return func(ctx http.Context) {
+        start := time.Now()
+        ctx.Request().Next()
+        duration := time.Since(start)
+        facades.Log().Info("Request processed", map[string]any{
+            "method": ctx.Request().Method(),
+            "path":   ctx.Request().Path(),
+            "duration": duration,
+        })
+    }
+}
+```
+
+## Creating Middleware
+
+### Artisan Command
+```bash
+# Create middleware using Artisan
+go run . artisan make:middleware Auth
+
+# Support nested folders
+go run . artisan make:middleware user/Auth
+```
+
+### Manual Creation
+- **Location**: Create in [app/http/middleware/](mdc:app/http/middleware/) directory
+- **Package Structure**: Follow Go package conventions
+- **Naming**: Use descriptive names for middleware functions
+- **Organization**: Group related middleware in subdirectories
+
+## Registering Middleware
+
+### Global Middleware
+```go
+// app/http/kernel.go
+package http
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "goravel/app/http/middleware"
+)
+
+type Kernel struct {
+}
+
+func (kernel *Kernel) Middleware() []http.Middleware {
+    return []http.Middleware{
+        middleware.Cors(),      // CORS for all requests
+        middleware.Logging(),   // Logging for all requests
+        middleware.Auth(),      // Authentication for all requests
+    }
+}
+```
+
+### Route-Specific Middleware
+```go
+import "github.com/goravel/framework/http/middleware"
+
+// Apply middleware to specific routes
+facades.Route().Middleware(middleware.Auth()).Get("users", userController.Show)
+facades.Route().Middleware(middleware.Auth()).Post("users", userController.Store)
+```
+
+### Middleware Groups
+```go
+// Apply middleware to route groups
+facades.Route().Group(func(router route.Router) {
+    router.Middleware(middleware.Auth()).Group(func(auth route.Router) {
+        auth.Get("/profile", userController.Profile)
+        auth.Put("/profile", userController.UpdateProfile)
+    })
+})
+```
+
+## Request Abortion
+
+### Abort Methods
+```go
+// Basic abort
+ctx.Request().Abort()
+
+// Abort with specific status code
+ctx.Request().Abort(http.StatusNotFound)
+
+// Abort with response
+ctx.Response().String(http.StatusNotFound, "Not Found").Abort()
+```
+
+### Common Abort Patterns
+```go
+// Authentication failure
+func Auth() http.Middleware {
+    return func(ctx http.Context) {
+        if !isAuthenticated(ctx) {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Unauthorized",
+            }).Abort()
+            return
+        }
+        ctx.Request().Next()
+    }
+}
+
+// Rate limiting
+func RateLimit() http.Middleware {
+    return func(ctx http.Context) {
+        if isRateLimited(ctx) {
+            ctx.Response().Json(http.StatusTooManyRequests, http.Json{
+                "error": "Rate limit exceeded",
+            }).Abort()
+            return
+        }
+        ctx.Request().Next()
+    }
+}
+```
+
+## Common Middleware Types
+
+### Authentication Middleware
+```go
+func Auth() http.Middleware {
+    return func(ctx http.Context) {
+        token := ctx.Request().Header("Authorization")
+        if token == "" {
+            ctx.Request().Abort(http.StatusUnauthorized)
+            return
+        }
+        
+        user, err := validateToken(token)
+        if err != nil {
+            ctx.Request().Abort(http.StatusUnauthorized)
+            return
+        }
+        
+        // Set user in context for controller access
+        ctx.Request().Set("user", user)
+        ctx.Request().Next()
+    }
+}
+```
+
+### CORS Middleware
+```go
+func Cors() http.Middleware {
+    return func(ctx http.Context) {
+        ctx.Response().Header("Access-Control-Allow-Origin", "*")
+        ctx.Response().Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        ctx.Response().Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        
+        if ctx.Request().Method() == "OPTIONS" {
+            ctx.Response().String(http.StatusOK, "").Abort()
+            return
+        }
+        
+        ctx.Request().Next()
+    }
+}
+```
+
+### Logging Middleware
+```go
+func Logging() http.Middleware {
+    return func(ctx http.Context) {
+        start := time.Now()
+        
+        facades.Log().Info("Request started", map[string]any{
+            "method": ctx.Request().Method(),
+            "path":   ctx.Request().Path(),
+            "ip":     ctx.Request().Ip(),
+        })
+        
+        ctx.Request().Next()
+        
+        facades.Log().Info("Request completed", map[string]any{
+            "method":   ctx.Request().Method(),
+            "path":     ctx.Request().Path(),
+            "duration": time.Since(start),
+            "status":   ctx.Response().Status(),
+        })
+    }
+}
+```
+
+### Rate Limiting Middleware
+```go
+func RateLimit() http.Middleware {
+    return func(ctx http.Context) {
+        ip := ctx.Request().Ip()
+        key := fmt.Sprintf("rate_limit:%s", ip)
+        
+        count := facades.Cache().Get(key, 0).(int)
+        if count >= 100 { // 100 requests per minute
+            ctx.Response().Json(http.StatusTooManyRequests, http.Json{
+                "error": "Rate limit exceeded",
+            }).Abort()
+            return
+        }
+        
+        facades.Cache().Put(key, count+1, 60) // 60 seconds
+        ctx.Request().Next()
+    }
+}
+```
+
+## Middleware Best Practices
+
+### Design Principles
+- **Single Responsibility**: Each middleware should handle one concern
+- **Reusability**: Design middleware to be reusable across routes
+- **Performance**: Keep middleware lightweight and efficient
+- **Error Handling**: Handle errors gracefully and provide meaningful responses
+
+### Execution Order
+- **Global Middleware**: Executed first, in registration order
+- **Route Middleware**: Executed after global middleware
+- **Controller**: Executed after all middleware
+- **Response Processing**: Middleware can process responses after controller
+
+### Common Patterns
+```go
+// Conditional middleware execution
+func ConditionalAuth() http.Middleware {
+    return func(ctx http.Context) {
+        // Skip authentication for public routes
+        if isPublicRoute(ctx.Request().Path()) {
+            ctx.Request().Next()
+            return
+        }
+        
+        // Apply authentication for protected routes
+        if !isAuthenticated(ctx) {
+            ctx.Request().Abort(http.StatusUnauthorized)
+            return
+        }
+        
+        ctx.Request().Next()
+    }
+}
+
+// Middleware with configuration
+func ConfigurableAuth(requiredRole string) http.Middleware {
+    return func(ctx http.Context) {
+        user := getUserFromContext(ctx)
+        if user == nil || user.Role != requiredRole {
+            ctx.Request().Abort(http.StatusForbidden)
+            return
+        }
+        ctx.Request().Next()
+    }
+}
+```
+
+## Testing Middleware
+
+### Unit Testing
+```go
+func TestAuthMiddleware(t *testing.T) {
+    // Create mock context
+    ctx := &MockContext{}
+    
+    // Test middleware
+    middleware := Auth()
+    middleware(ctx)
+    
+    // Assertions
+    assert.Equal(t, http.StatusUnauthorized, ctx.Response().Status())
+}
+```
+
+### Integration Testing
+```go
+func TestMiddlewareIntegration(t *testing.T) {
+    // Test middleware with real HTTP requests
+    response := facades.Route().ServeHTTP("GET", "/protected", nil)
+    assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+}
+```
+
+## Development Guidelines
+
+### Middleware Organization
+- **Group Related Middleware**: Organize by functionality (auth, logging, etc.)
+- **Use Descriptive Names**: Clear, descriptive middleware function names
+- **Document Purpose**: Document middleware purpose and usage
+- **Version Control**: Track middleware changes and updates
+
+### Performance Considerations
+- **Minimize Processing**: Keep middleware processing minimal
+- **Cache Results**: Cache expensive operations when possible
+- **Avoid Blocking**: Don't block the request pipeline unnecessarily
+- **Monitor Performance**: Monitor middleware performance impact
+
+### Security Considerations
+- **Input Validation**: Validate inputs in middleware
+- **Authentication**: Implement proper authentication checks
+- **Authorization**: Implement role-based access control
+- **Rate Limiting**: Implement appropriate rate limiting
+
+## Framework Integration
+
+### Built-in Middleware
+- **CORS**: Cross-origin resource sharing
+- **Authentication**: User authentication
+- **Rate Limiting**: Request rate limiting
+- **Logging**: Request/response logging
+
+### Custom Middleware
+- **Business Logic**: Application-specific middleware
+- **Third-party Integration**: External service middleware
+- **Monitoring**: Application monitoring middleware
+- **Security**: Security-specific middleware
+
+## Best Practices
+
+### Middleware Design
+- **Keep it Simple**: Simple, focused middleware functions
+- **Handle Errors**: Proper error handling and responses
+- **Document Usage**: Document middleware usage and configuration
+- **Test Thoroughly**: Comprehensive testing of middleware
+
+### Performance
+- **Optimize Execution**: Minimize middleware execution time
+- **Use Caching**: Cache expensive operations
+- **Monitor Impact**: Monitor middleware performance impact
+- **Profile Code**: Profile middleware for bottlenecks
+
+### Security
+- **Validate Inputs**: Validate all inputs in middleware
+- **Implement Authentication**: Proper authentication checks
+- **Handle Authorization**: Role-based access control
+- **Log Security Events**: Log security-related events

@@ -1,0 +1,66 @@
+---
+alwaysApply: true
+---
+# Testing Guidelines for Goravel
+
+## Test Structure
+- Place tests in the same package as the code being tested
+- Use `*_test.go` suffix for test files
+- Create test directories for integration tests
+- Use table-driven tests for multiple scenarios
+
+## Unit Testing
+- Test individual functions and methods
+- Mock external dependencies
+- Use interfaces for dependency injection
+- Aim for high code coverage
+- Test both success and error cases
+
+## Integration Testing
+- Test complete workflows
+- Use test database for database operations
+- Test API endpoints with HTTP requests
+- Verify database state after operations
+- Test middleware functionality
+
+## Test Organization
+```
+tests/
+├── Unit/
+│   ├── Controllers/
+│   ├── Models/
+│   └── Services/
+├── Integration/
+│   ├── API/
+│   └── Database/
+└── Feature/
+    └── EndToEnd/
+```
+
+## Testing Best Practices
+- Use descriptive test names that explain the scenario
+- Follow AAA pattern (Arrange, Act, Assert)
+- Keep tests independent and isolated
+- Use factories for test data creation
+- Clean up test data after each test
+
+## Goravel-Specific Testing
+- Test route definitions and middleware
+- Test model relationships and validations
+- Test queue job processing
+- Test cache operations
+- Test configuration loading
+
+## Test Data Management
+- Use database transactions for test isolation
+- Create test fixtures and factories
+- Use database seeding for test data
+- Implement proper test cleanup
+- Use environment-specific test configurations
+
+## Performance Testing
+- Test API response times
+- Test database query performance
+- Test memory usage
+- Test concurrent request handling
+- Use benchmarking for performance-critical code

@@ -1,0 +1,532 @@
+---
+alwaysApply: true
+---
+
+# Goravel Session Management
+
+Based on the [official Goravel session documentation](https://www.goravel.dev/the-basics/session.html).
+
+## Session Overview
+
+### Introduction
+- **Stateful Experience**: Store user information across multiple requests within stateless HTTP protocol
+- **Server-side Storage**: User information stored persistently on the server side
+- **Unified Interface**: Goravel offers a unified interface for various persistent storage drivers
+- **Session Middleware**: Provides middleware to start sessions automatically
+
+### Key Concepts
+- **Session Facade**: Access session functionality through `facades.Session()`
+- **Session Context**: Access session through `ctx.Request().Session()`
+- **Storage Drivers**: Multiple storage drivers (file, database, Redis, etc.)
+- **Flash Data**: Temporary session data for one request cycle
+
+## Configuration
+
+### Session Configuration
+```go
+// config/session.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("session", map[string]interface{}{
+        // Session Configuration
+        //
+        // Configure the session driver
+        "default": config.Env("SESSION_DRIVER", "file"),
+
+        // Configure the session lifetime
+        "lifetime": config.Env("SESSION_LIFETIME", 120),
+
+        // Configure the session path
+        "path": config.Env("SESSION_PATH", "/"),
+
+        // Configure the session domain
+        "domain": config.Env("SESSION_DOMAIN", ""),
+
+        // Configure the session secure flag
+        "secure": config.Env("SESSION_SECURE", false),
+
+        // Configure the session http_only flag
+        "http_only": config.Env("SESSION_HTTP_ONLY", true),
+
+        // Configure the session same_site flag
+        "same_site": config.Env("SESSION_SAME_SITE", "lax"),
+
+        // Configure session drivers
+        "drivers": map[string]any{
+            "file": map[string]any{
+                "driver": "file",
+            },
+            "database": map[string]any{
+                "driver": "database",
+                "table":  "sessions",
+            },
+            "redis": map[string]any{
+                "driver": "redis",
+                "connection": "default",
+            },
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Session configuration
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+SESSION_PATH=/
+SESSION_DOMAIN=
+SESSION_SECURE=false
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
+```
+
+## Middleware Registration
+
+### Register Session Middleware
+```go
+// app/http/kernel.go
+package http
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/session/middleware"
+)
+
+type Kernel struct {
+}
+
+func (kernel *Kernel) Middleware() []http.Middleware {
+    return []http.Middleware{
+        middleware.StartSession(),
+    }
+}
+```
+
+### Route-Specific Middleware
+```go
+// Apply session middleware to specific routes
+facades.Route().Middleware(middleware.StartSession()).Get("/dashboard", dashboardController.Index)
+facades.Route().Middleware(middleware.StartSession()).Post("/login", authController.Login)
+```
+
+## Interacting With The Session
+
+### Retrieving Data
+```go
+// Get session value
+value := ctx.Request().Session().Get("key")
+
+// Get session value with default
+value := ctx.Request().Session().Get("key", "default")
+
+// Get all session data
+data := ctx.Request().Session().All()
+
+// Get subset of session data
+data := ctx.Request().Session().Only([]string{"username", "email"})
+```
+
+### Checking Session Data
+```go
+// Check if session has key (not nil)
+if ctx.Request().Session().Has("user") {
+    // User exists and is not nil
+}
+
+// Check if session has key (even if nil)
+if ctx.Request().Session().Exists("user") {
+    // User exists (may be nil)
+}
+
+// Check if session is missing key
+if ctx.Request().Session().Missing("user") {
+    // User does not exist
+}
+```
+
+### Storing Data
+```go
+// Store session data
+ctx.Request().Session().Put("key", "value")
+ctx.Request().Session().Put("user", map[string]any{
+    "id":    1,
+    "name":  "John Doe",
+    "email": "john@example.com",
+})
+
+// Store multiple values
+ctx.Request().Session().Put("username", "johndoe")
+ctx.Request().Session().Put("email", "john@example.com")
+```
+
+### Retrieving & Deleting Data
+```go
+// Get and delete session data
+value := ctx.Request().Session().Pull("key")
+
+// Delete specific session data
+ctx.Request().Session().Forget("username", "email")
+
+// Delete all session data
+ctx.Request().Session().Flush()
+```
+
+## Session Security
+
+### Regenerating Session ID
+```go
+// Regenerate session ID (keep data)
+ctx.Request().Session().Regenerate()
+
+// Regenerate session ID and clear data
+ctx.Request().Session().Invalidate()
+
+// Save new session to cookie
+ctx.Response().Cookie(http.Cookie{
+    Name:     ctx.Request().Session().GetName(),
+    Value:    ctx.Request().Session().GetID(),
+    MaxAge:   facades.Config().GetInt("session.lifetime") * 60,
+    Path:     facades.Config().GetString("session.path"),
+    Domain:   facades.Config().GetString("session.domain"),
+    Secure:   facades.Config().GetBool("session.secure"),
+    HttpOnly: facades.Config().GetBool("session.http_only"),
+    SameSite: facades.Config().GetString("session.same_site"),
+})
+```
+
+### Session Security Best Practices
+- **Regenerate ID**: Regenerate session ID after login
+- **Secure Cookies**: Use secure, HttpOnly cookies
+- **Session Timeout**: Implement proper session timeout
+- **CSRF Protection**: Implement CSRF protection for forms
+
+## Flash Data
+
+### Flash Data Overview
+- **Temporary Storage**: Flash data available for one request cycle
+- **Automatic Deletion**: Flash data automatically deleted after use
+- **Status Messages**: Perfect for temporary messages like success/error notifications
+
+### Using Flash Data
+```go
+// Store flash data
+ctx.Request().Session().Flash("status", "Task was successful!")
+ctx.Request().Session().Flash("error", "Invalid credentials")
+
+// Keep flash data for additional request
+ctx.Request().Session().Reflash()
+
+// Keep specific flash data
+ctx.Request().Session().Keep("status", "username")
+
+// Store flash data for immediate use
+ctx.Request().Session().Now("status", "Task was successful!")
+```
+
+### Flash Data Patterns
+```go
+// Controller with flash data
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Create user
+    user, err := c.userService.Create(ctx.Request().All())
+    if err != nil {
+        ctx.Request().Session().Flash("error", "Failed to create user")
+        return ctx.Response().Redirect(http.StatusFound, "/users/create")
+    }
+    
+    ctx.Request().Session().Flash("success", "User created successfully")
+    return ctx.Response().Redirect(http.StatusFound, fmt.Sprintf("/users/%d", user.ID))
+}
+
+// Display flash data in view
+func (c *HomeController) Index(ctx http.Context) http.Response {
+    return ctx.Response().View().Make("home.tmpl", map[string]any{
+        "success": ctx.Request().Session().Get("success"),
+        "error":   ctx.Request().Session().Get("error"),
+    })
+}
+```
+
+## Session Manager
+
+### Building Custom Sessions
+```go
+import "github.com/goravel/framework/facades"
+
+// Build custom session with driver
+driver, err := facades.Session().Driver("file")
+if err != nil {
+    return err
+}
+
+session := facades.Session().BuildSession(driver, "custom-session-id")
+session.Start()
+```
+
+### Session Lifecycle
+```go
+// Start new session
+session := facades.Session().BuildSession(driver)
+session.Start()
+
+// Save session data
+session.Save()
+
+// Attach session to request
+ctx.Request().SetSession(session)
+
+// Check if request has session
+if ctx.Request().HasSession() {
+    // Session exists
+}
+```
+
+## Custom Session Drivers
+
+### Implementing Custom Driver
+```go
+// Custom session driver
+type CustomDriver struct {
+    // Driver implementation
+}
+
+// Implement session.Driver interface
+func (d *CustomDriver) Close() error {
+    // Close the session handler
+    return nil
+}
+
+func (d *CustomDriver) Destroy(id string) error {
+    // Destroy session with given ID
+    return nil
+}
+
+func (d *CustomDriver) Gc(maxLifetime int) error {
+    // Perform garbage collection
+    return nil
+}
+
+func (d *CustomDriver) Open(path string, name string) error {
+    // Open session with given path and name
+    return nil
+}
+
+func (d *CustomDriver) Read(id string) (string, error) {
+    // Read session data for given ID
+    return "", nil
+}
+
+func (d *CustomDriver) Write(id string, data string) error {
+    // Write session data for given ID
+    return nil
+}
+```
+
+### Registering Custom Driver
+```go
+// config/session.go
+func init() {
+    config := facades.Config
+    config.Add("session", map[string]interface{}{
+        "default": "custom",
+        "drivers": map[string]any{
+            "file": map[string]any{
+                "driver": "file",
+            },
+            "custom": map[string]any{
+                "driver": "custom",
+                "via": func() (session.Driver, error) {
+                    return &CustomDriver{}, nil
+                },
+            },
+        },
+    })
+}
+```
+
+### Retrieving Driver Instance
+```go
+// Get default driver
+driver, err := facades.Session().Driver()
+
+// Get specific driver
+driver, err := facades.Session().Driver("file")
+driver, err := facades.Session().Driver("database")
+driver, err := facades.Session().Driver("redis")
+```
+
+## Common Session Patterns
+
+### Authentication Session
+```go
+// Login controller
+func (c *AuthController) Login(ctx http.Context) http.Response {
+    // Authenticate user
+    user, err := c.authService.Authenticate(ctx.Request().All())
+    if err != nil {
+        ctx.Request().Session().Flash("error", "Invalid credentials")
+        return ctx.Response().Redirect(http.StatusFound, "/login")
+    }
+    
+    // Store user in session
+    ctx.Request().Session().Put("user", map[string]any{
+        "id":    user.ID,
+        "name":  user.Name,
+        "email": user.Email,
+        "role":  user.Role,
+    })
+    
+    ctx.Request().Session().Flash("success", "Welcome back!")
+    return ctx.Response().Redirect(http.StatusFound, "/dashboard")
+}
+
+// Logout controller
+func (c *AuthController) Logout(ctx http.Context) http.Response {
+    // Clear session
+    ctx.Request().Session().Flush()
+    
+    ctx.Request().Session().Flash("success", "You have been logged out")
+    return ctx.Response().Redirect(http.StatusFound, "/login")
+}
+```
+
+### Shopping Cart Session
+```go
+// Add item to cart
+func (c *CartController) AddItem(ctx http.Context) http.Response {
+    productID := ctx.Request().RouteInt("id")
+    quantity := ctx.Request().InputInt("quantity", 1)
+    
+    // Get current cart
+    cart := ctx.Request().Session().Get("cart", map[string]int{})
+    
+    // Add item to cart
+    cart[fmt.Sprintf("product_%d", productID)] = quantity
+    
+    // Save cart to session
+    ctx.Request().Session().Put("cart", cart)
+    
+    ctx.Request().Session().Flash("success", "Item added to cart")
+    return ctx.Response().Redirect(http.StatusFound, "/cart")
+}
+
+// View cart
+func (c *CartController) Index(ctx http.Context) http.Response {
+    cart := ctx.Request().Session().Get("cart", map[string]int{})
+    
+    return ctx.Response().View().Make("cart.tmpl", map[string]any{
+        "cart": cart,
+    })
+}
+```
+
+### User Preferences Session
+```go
+// Save user preferences
+func (c *UserController) SavePreferences(ctx http.Context) http.Response {
+    preferences := map[string]any{
+        "theme":      ctx.Request().Input("theme", "light"),
+        "language":   ctx.Request().Input("language", "en"),
+        "timezone":   ctx.Request().Input("timezone", "UTC"),
+        "notifications": ctx.Request().InputBool("notifications", true),
+    }
+    
+    ctx.Request().Session().Put("preferences", preferences)
+    
+    ctx.Request().Session().Flash("success", "Preferences saved")
+    return ctx.Response().Redirect(http.StatusFound, "/profile")
+}
+```
+
+## Session Best Practices
+
+### Security Considerations
+- **Session Regeneration**: Regenerate session ID after login
+- **Secure Cookies**: Use secure, HttpOnly cookies
+- **Session Timeout**: Implement proper session timeout
+- **CSRF Protection**: Implement CSRF protection for forms
+- **Input Validation**: Validate all session data
+
+### Performance Considerations
+- **Session Storage**: Choose appropriate session storage driver
+- **Session Cleanup**: Implement proper session cleanup
+- **Session Compression**: Use session compression for large data
+- **Session Caching**: Cache session data when appropriate
+
+### Development Guidelines
+- **Session Organization**: Organize session data logically
+- **Session Validation**: Validate session data before use
+- **Error Handling**: Handle session errors gracefully
+- **Testing**: Test session functionality thoroughly
+
+## Testing Sessions
+
+### Unit Testing
+```go
+func TestSessionOperations(t *testing.T) {
+    // Create mock context
+    ctx := &MockContext{}
+    
+    // Test session operations
+    ctx.Request().Session().Put("key", "value")
+    value := ctx.Request().Session().Get("key")
+    
+    assert.Equal(t, "value", value)
+    
+    // Test session deletion
+    ctx.Request().Session().Forget("key")
+    value = ctx.Request().Session().Get("key")
+    
+    assert.Nil(t, value)
+}
+```
+
+### Integration Testing
+```go
+func TestSessionIntegration(t *testing.T) {
+    // Test session with real HTTP requests
+    response := facades.Route().ServeHTTP("POST", "/login", map[string]any{
+        "email":    "test@example.com",
+        "password": "password",
+    })
+    
+    assert.Equal(t, 302, response.StatusCode)
+    
+    // Test session persistence
+    response = facades.Route().ServeHTTP("GET", "/dashboard", nil)
+    assert.Equal(t, 200, response.StatusCode)
+}
+```
+
+## Best Practices
+
+### Session Design
+- **Minimal Data**: Store only necessary data in sessions
+- **Data Structure**: Use consistent data structures
+- **Session Keys**: Use descriptive session keys
+- **Data Validation**: Validate session data before use
+
+### Security
+- **Session Regeneration**: Regenerate session ID after login
+- **Secure Storage**: Use secure session storage
+- **Session Timeout**: Implement proper session timeout
+- **Input Validation**: Validate all session inputs
+
+### Performance
+- **Storage Driver**: Choose appropriate session storage driver
+- **Session Cleanup**: Implement proper session cleanup
+- **Data Compression**: Use compression for large session data
+- **Caching**: Cache session data when appropriate
+
+### Monitoring
+- **Session Metrics**: Monitor session usage and performance
+- **Error Tracking**: Track session errors and issues
+- **Security Monitoring**: Monitor for session security issues
+- **Performance Monitoring**: Monitor session performance impact

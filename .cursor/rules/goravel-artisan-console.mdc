@@ -1,0 +1,589 @@
+---
+alwaysApply: true
+---
+
+# Goravel Artisan Console
+
+Based on the [official Goravel Artisan console documentation](https://www.goravel.dev/digging-deeper/artisan-console.html).
+
+## Artisan Console Overview
+
+### Introduction
+- **CLI Tool**: Artisan is the CLI tool that comes with Goravel for command-line interaction
+- **Facade Access**: Access Artisan functionality through `facades.Artisan()`
+- **Development Assistance**: Provides useful commands for application development
+- **Command Management**: Create, register, and execute custom commands
+
+### Key Concepts
+- **Artisan Facade**: Access console functionality through `facades.Artisan()`
+- **Command Structure**: Commands follow specific interface patterns
+- **Input/Output**: Rich I/O capabilities for user interaction
+- **Command Registration**: Register commands in [app/console/kernel.go](mdc:app/console/kernel.go)
+
+## Basic Artisan Usage
+
+### Viewing Available Commands
+```bash
+# List all available commands
+go run . artisan list
+
+# Or using the artisan script
+./artisan list
+```
+
+### Command Help
+```bash
+# Get help for specific command
+go run . artisan help migrate
+```
+
+### Shell Alias Setup
+```bash
+# Add alias to shell configuration
+echo -e "\r\nalias artisan=\"go run . artisan\"" >>~/.zshrc
+
+# Then use simplified syntax
+artisan make:controller DemoController
+```
+
+### Artisan Script Usage
+```bash
+# Use the artisan shell script
+./artisan make:controller DemoController
+```
+
+## Generating Commands
+
+### Creating New Commands
+```bash
+# Create command in app/console/commands directory
+go run . artisan make:command SendEmails
+
+# Create command in nested folder
+go run . artisan make:command user/SendEmails
+```
+
+### Command Structure
+```go
+package commands
+
+import (
+    "github.com/goravel/framework/contracts/console"
+    "github.com/goravel/framework/contracts/console/command"
+)
+
+type SendEmails struct {
+}
+
+// Signature The name and signature of the console command
+func (receiver *SendEmails) Signature() string {
+    return "send:emails"
+}
+
+// Description The console command description
+func (receiver *SendEmails) Description() string {
+    return "Send emails"
+}
+
+// Extend The console command extend
+func (receiver *SendEmails) Extend() command.Extend {
+    return command.Extend{}
+}
+
+// Handle Execute the console command
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    return nil
+}
+```
+
+## Command I/O
+
+### Retrieving Input
+
+#### Arguments
+```bash
+# Command with arguments
+go run . artisan send:emails NAME EMAIL
+```
+
+```go
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    name := ctx.Argument(0)
+    email := ctx.Argument(1)
+    all := ctx.Arguments()
+    
+    return nil
+}
+```
+
+#### Options
+```go
+// Define command options
+func (receiver *ListCommand) Extend() command.Extend {
+    return command.Extend{
+        Flags: []command.Flag{
+            &command.StringFlag{
+                Name:    "lang",
+                Value:   "default",
+                Aliases: []string{"l"},
+                Usage:   "language for the greeting",
+            },
+        },
+    }
+}
+
+// Retrieve options
+func (receiver *ListCommand) Handle(ctx console.Context) error {
+    lang := ctx.Option("lang")
+    return nil
+}
+```
+
+```bash
+# Using options
+go run . artisan emails --lang Chinese
+go run . artisan emails -l Chinese
+```
+
+#### Available Flag Types
+- **StringFlag**: String values
+- **StringSliceFlag**: String arrays
+- **BoolFlag**: Boolean values
+- **Float64Flag**: Float64 values
+- **Float64SliceFlag**: Float64 arrays
+- **IntFlag**: Integer values
+- **IntSliceFlag**: Integer arrays
+- **Int64Flag**: Int64 values
+- **Int64SliceFlag**: Int64 arrays
+
+### Prompting For Input
+
+#### Asking Questions
+```go
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    email, err := ctx.Ask("What is your email address?")
+    return err
+}
+
+// With options
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    name, err := ctx.Ask("What is your name?", console.AskOption{
+        Default: "Krishan",
+    })
+    return err
+}
+```
+
+#### AskOption Configuration
+```go
+type AskOption struct {
+    Default     string                    // Default value
+    Description string                    // Input description
+    Lines       int                       // Number of lines for input
+    Limit       int                       // Character limit
+    Multiple    bool                      // Single or multiple lines
+    Placeholder string                    // Input placeholder
+    Prompt      string                    // Prompt message
+    Validate    func(string) error        // Validation function
+}
+```
+
+#### Secret Input
+```go
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    password, err := ctx.Secret("What is the password?", console.SecretOption{
+        Validate: func(s string) error {
+            if len(s) < 8 {
+                return errors.New("password length should be at least 8")
+            }
+            return nil
+        },
+    })
+    return err
+}
+```
+
+#### SecretOption Configuration
+```go
+type SecretOption struct {
+    Default     string                    // Default value
+    Description string                    // Input description
+    Limit       int                       // Character limit
+    Placeholder string                    // Input placeholder
+    Validate    func(string) error        // Validation function
+}
+```
+
+#### Confirming Actions
+```go
+// Basic confirmation
+if ctx.Confirm("Do you wish to continue?") {
+    // Proceed with action
+}
+
+// Advanced confirmation with options
+if ctx.Confirm("Do you wish to continue?", console.ConfirmOption{
+    Default:     true,
+    Affirmative: "Yes",
+    Negative:    "No",
+}) {
+    // Proceed with action
+}
+```
+
+#### ConfirmOption Configuration
+```go
+type ConfirmOption struct {
+    Affirmative string    // Affirmative button label
+    Default     bool      // Default value
+    Description string    // Input description
+    Negative    string    // Negative button label
+}
+```
+
+#### Single Select Questions
+```go
+question := "What is your favorite programming language?"
+options := []console.Choice{
+    {Key: "go", Value: "Go"},
+    {Key: "php", Value: "PHP"},
+    {Key: "python", Value: "Python"},
+    {Key: "cpp", Value: "C++", Selected: true},
+}
+color, err := ctx.Choice(question, options)
+
+// With options
+color, err := ctx.Choice(question, options, console.ChoiceOption{
+    Default: "go",
+})
+```
+
+#### ChoiceOption Configuration
+```go
+type ChoiceOption struct {
+    Default     string                    // Default value
+    Description string                    // Input description
+    Validate    func(string) error        // Validation function
+}
+```
+
+#### Multiple Select Questions
+```go
+question := "What are your favorite programming languages?"
+options := []console.Choice{
+    {Key: "go", Value: "Go"},
+    {Key: "php", Value: "PHP"},
+    {Key: "python", Value: "Python"},
+    {Key: "cpp", Value: "C++", Selected: true},
+}
+colors, err := ctx.MultiSelect(question, options)
+
+// With options
+colors, err := ctx.MultiSelect(question, options, console.MultiSelectOption{
+    Default: []string{"go", "php"},
+})
+```
+
+#### MultiSelectOption Configuration
+```go
+type MultiSelectOption struct {
+    Default     []string                  // Default values
+    Description string                    // Input description
+    Filterable  bool                      // Enable filtering
+    Limit       int                       // Selection limit
+    Validate    func([]string) error       // Validation function
+}
+```
+
+### Writing Output
+
+#### Basic Output Methods
+```go
+func (receiver *SendEmails) Handle(ctx console.Context) error {
+    ctx.Comment("This is a comment message")
+    ctx.Info("This is an info message")
+    ctx.Error("This is an error message")
+    ctx.Line("This is a line message")
+    ctx.Warning("This is a warning message")
+    return nil
+}
+```
+
+#### New Line Output
+```go
+// Single blank line
+ctx.NewLine()
+
+// Multiple blank lines
+ctx.NewLine(2)
+```
+
+#### Progress Bars
+```go
+// Automatic progress bar
+items := []any{"item1", "item2", "item3"}
+_, err := ctx.WithProgressBar(items, func(item any) error {
+    // performTask(item)
+    return nil
+})
+
+// Manual progress bar
+users := []string{"user1", "user2", "user3"}
+bar := ctx.CreateProgressBar(len(users))
+
+err := bar.Start()
+for _, user := range users {
+    // process user
+    bar.Advance()
+    time.Sleep(time.Millisecond * 50)
+}
+err = bar.Finish()
+```
+
+#### Spinner
+```go
+err := ctx.Spinner("Loading...", console.SpinnerOption{
+    Action: func() error {
+        // Task to perform
+        time.Sleep(2 * time.Second)
+        return nil
+    },
+})
+```
+
+## Command Categories
+
+### Setting Command Categories
+```go
+func (receiver *ConsoleMakeCommand) Extend() command.Extend {
+    return command.Extend{
+        Category: "make",
+    }
+}
+```
+
+### Category Benefits
+- **Organization**: Group related commands together
+- **List Display**: Commands grouped in `artisan list` output
+- **Maintenance**: Easier command management
+
+## Registering Commands
+
+### Command Registration
+```go
+// app/console/kernel.go
+func (kernel Kernel) Commands() []console.Command {
+    return []console.Command{
+        &commands.SendEmails{},
+        &commands.ProcessOrders{},
+        &commands.GenerateReports{},
+    }
+}
+```
+
+### Registration Best Practices
+- **Single Location**: Register all commands in [app/console/kernel.go](mdc:app/console/kernel.go)
+- **Import Management**: Import command packages properly
+- **Organization**: Group related commands together
+- **Documentation**: Document command purposes
+
+## Programmatic Command Execution
+
+### Executing Commands Programmatically
+```go
+// Execute command without arguments
+facades.Artisan().Call("emails")
+
+// Execute command with arguments and options
+facades.Artisan().Call("emails --lang Chinese name")
+
+// In route handler
+facades.Route().Get("/", func(c *gin.Context) {
+    facades.Artisan().Call("emails")
+    facades.Artisan().Call("emails --lang Chinese name")
+})
+```
+
+### Use Cases for Programmatic Execution
+- **Scheduled Tasks**: Execute commands from task schedulers
+- **Web Triggers**: Trigger commands from web requests
+- **Batch Processing**: Execute commands in batch operations
+- **API Integration**: Execute commands from API endpoints
+
+## Advanced Features
+
+### Disabling Print Colors
+```bash
+# Disable colors for better log compatibility
+go run . artisan list --no-ansi
+```
+
+### Command Development Best Practices
+- **Clear Signatures**: Use descriptive command signatures
+- **Helpful Descriptions**: Provide clear command descriptions
+- **Error Handling**: Implement proper error handling
+- **Input Validation**: Validate all user inputs
+- **Progress Feedback**: Use progress bars for long operations
+
+## Common Command Patterns
+
+### Database Operations
+```go
+type MigrateCommand struct{}
+
+func (c *MigrateCommand) Signature() string {
+    return "migrate:run"
+}
+
+func (c *MigrateCommand) Description() string {
+    return "Run database migrations"
+}
+
+func (c *MigrateCommand) Handle(ctx console.Context) error {
+    ctx.Info("Running migrations...")
+    
+    // Migration logic
+    if err := facades.Orm().Migrate(); err != nil {
+        ctx.Error("Migration failed: " + err.Error())
+        return err
+    }
+    
+    ctx.Info("Migrations completed successfully")
+    return nil
+}
+```
+
+### File Processing
+```go
+type ProcessFilesCommand struct{}
+
+func (c *ProcessFilesCommand) Signature() string {
+    return "files:process"
+}
+
+func (c *ProcessFilesCommand) Handle(ctx console.Context) error {
+    files := []string{"file1.txt", "file2.txt", "file3.txt"}
+    
+    _, err := ctx.WithProgressBar(files, func(file any) error {
+        // Process file
+        ctx.Info("Processing: " + file.(string))
+        time.Sleep(100 * time.Millisecond)
+        return nil
+    })
+    
+    return err
+}
+```
+
+### User Interaction
+```go
+type SetupCommand struct{}
+
+func (c *SetupCommand) Signature() string {
+    return "app:setup"
+}
+
+func (c *SetupCommand) Handle(ctx console.Context) error {
+    // Ask for configuration
+    name, err := ctx.Ask("What is your application name?")
+    if err != nil {
+        return err
+    }
+    
+    // Confirm setup
+    if !ctx.Confirm("Do you want to proceed with setup?") {
+        ctx.Info("Setup cancelled")
+        return nil
+    }
+    
+    // Select database type
+    dbType, err := ctx.Choice("Select database type:", []console.Choice{
+        {Key: "mysql", Value: "MySQL"},
+        {Key: "postgres", Value: "PostgreSQL"},
+        {Key: "sqlite", Value: "SQLite"},
+    })
+    if err != nil {
+        return err
+    }
+    
+    ctx.Info("Setting up application: " + name)
+    ctx.Info("Database type: " + dbType)
+    
+    return nil
+}
+```
+
+## Testing Commands
+
+### Unit Testing
+```go
+func TestSendEmailsCommand(t *testing.T) {
+    // Create mock context
+    ctx := &MockContext{}
+    
+    // Create command
+    command := &SendEmails{}
+    
+    // Test command execution
+    err := command.Handle(ctx)
+    
+    // Assertions
+    assert.NoError(t, err)
+    assert.True(t, ctx.InfoCalled)
+}
+```
+
+### Integration Testing
+```go
+func TestCommandIntegration(t *testing.T) {
+    // Test command with real execution
+    err := facades.Artisan().Call("send:emails")
+    assert.NoError(t, err)
+}
+```
+
+## Development Guidelines
+
+### Command Organization
+- **Single Responsibility**: Each command should have one clear purpose
+- **Descriptive Names**: Use clear, descriptive command names
+- **Proper Documentation**: Document command usage and parameters
+- **Error Handling**: Implement comprehensive error handling
+
+### Performance Considerations
+- **Progress Feedback**: Use progress bars for long operations
+- **Memory Management**: Handle large datasets efficiently
+- **Resource Cleanup**: Clean up resources properly
+- **Async Operations**: Use appropriate concurrency patterns
+
+### Security Considerations
+- **Input Validation**: Validate all user inputs
+- **Sensitive Data**: Handle sensitive data securely
+- **Access Control**: Implement proper access control
+- **Audit Logging**: Log command executions
+
+## Best Practices
+
+### Command Design
+- **Clear Purpose**: Each command should have a clear, single purpose
+- **User-Friendly**: Design commands for ease of use
+- **Error Messages**: Provide clear, actionable error messages
+- **Help Text**: Include comprehensive help information
+
+### Input/Output
+- **Consistent Format**: Use consistent output formatting
+- **Progress Indication**: Show progress for long operations
+- **Error Handling**: Handle errors gracefully
+- **User Feedback**: Provide appropriate user feedback
+
+### Testing
+- **Unit Tests**: Test individual command methods
+- **Integration Tests**: Test complete command workflows
+- **Mock Dependencies**: Mock external dependencies
+- **Edge Cases**: Test edge cases and error conditions
+
+### Documentation
+- **Command Documentation**: Document command usage
+- **Parameter Documentation**: Document all parameters
+- **Example Usage**: Provide usage examples
+- **Error Scenarios**: Document error scenarios

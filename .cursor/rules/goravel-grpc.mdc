@@ -1,0 +1,659 @@
+---
+alwaysApply: true
+---
+
+# Goravel gRPC
+
+Based on the [official Goravel gRPC documentation](https://www.goravel.dev/the-basics/grpc.html).
+
+## gRPC Overview
+
+### Introduction
+- **gRPC Module**: Operated by `facades.Grpc()` for high-performance RPC communication
+- **Protocol Buffers**: Use protobuf for efficient serialization and communication
+- **Service Definition**: Define services using protocol buffer definitions
+- **Client-Server Architecture**: Support for both gRPC servers and clients
+
+### Key Concepts
+- **gRPC Facade**: Access gRPC functionality through `facades.Grpc()`
+- **Protocol Buffers**: Define service contracts using `.proto` files
+- **Controllers**: Handle gRPC requests in [app/grpc/controllers/](mdc:app/grpc/controllers/) directory
+- **Interceptors**: Middleware for gRPC requests and responses
+
+## Configuration
+
+### gRPC Configuration
+```go
+// config/grpc.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("grpc", map[string]interface{}{
+        // gRPC Configuration
+        //
+        // Configure your server host
+        "host": config.Env("GRPC_HOST", ""),
+
+        // Configure your client host and interceptors
+        "clients": map[string]any{
+            "user": map[string]any{
+                "host":         config.Env("GRPC_USER_HOST", ""),
+                "port":         config.Env("GRPC_USER_PORT", ""),
+                "interceptors": []string{"trace"},
+            },
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Server configuration
+GRPC_HOST=localhost:9000
+
+# Client configuration
+GRPC_USER_HOST=localhost
+GRPC_USER_PORT=9001
+```
+
+## Controllers
+
+### gRPC Controller Structure
+```go
+// app/grpc/controllers/user_controller.go
+package controllers
+
+import (
+    "context"
+    "net/http"
+
+    "github.com/goravel/grpc/protos"
+)
+
+type UserController struct {
+    userService UserService
+    logger      Logger
+}
+
+func NewUserController(userService UserService, logger Logger) *UserController {
+    return &UserController{
+        userService: userService,
+        logger:      logger,
+    }
+}
+
+func (r *UserController) Show(ctx context.Context, req *protos.UserRequest) (*protos.UserResponse, error) {
+    // Log the request
+    r.logger.Info("gRPC User Show", map[string]any{
+        "user_id": req.UserId,
+    })
+
+    // Process the request
+    user, err := r.userService.FindByID(req.UserId)
+    if err != nil {
+        return &protos.UserResponse{
+            Code:    http.StatusNotFound,
+            Message: "User not found",
+        }, nil
+    }
+
+    return &protos.UserResponse{
+        Code:    http.StatusOK,
+        Message: "Success",
+        Data: &protos.UserData{
+            Id:    user.ID,
+            Name:  user.Name,
+            Email: user.Email,
+        },
+    }, nil
+}
+
+func (r *UserController) Create(ctx context.Context, req *protos.CreateUserRequest) (*protos.UserResponse, error) {
+    // Validate request
+    if req.Name == "" {
+        return &protos.UserResponse{
+            Code:    http.StatusBadRequest,
+            Message: "Name is required",
+        }, nil
+    }
+
+    // Create user
+    user, err := r.userService.Create(req.Name, req.Email)
+    if err != nil {
+        return &protos.UserResponse{
+            Code:    http.StatusInternalServerError,
+            Message: "Failed to create user",
+        }, nil
+    }
+
+    return &protos.UserResponse{
+        Code:    http.StatusCreated,
+        Message: "User created successfully",
+        Data: &protos.UserData{
+            Id:    user.ID,
+            Name:  user.Name,
+            Email: user.Email,
+        },
+    }, nil
+}
+```
+
+### Controller Best Practices
+- **Error Handling**: Return appropriate gRPC status codes
+- **Logging**: Log gRPC requests and responses
+- **Validation**: Validate incoming requests
+- **Service Integration**: Use service layer for business logic
+
+## Routing
+
+### Define gRPC Routes
+```go
+// routes/grpc.go
+package routes
+
+import (
+    "github.com/goravel/grpc/protos"
+    "github.com/goravel/framework/facades"
+
+    "goravel/app/grpc/controllers"
+)
+
+func Grpc() {
+    // Register user service
+    protos.RegisterUserServer(facades.Grpc().Server(), controllers.NewUserController())
+    
+    // Register other services
+    protos.RegisterProductServer(facades.Grpc().Server(), controllers.NewProductController())
+    protos.RegisterOrderServer(facades.Grpc().Server(), controllers.NewOrderController())
+}
+```
+
+### Service Registration
+```go
+// Register multiple services
+func Grpc() {
+    // User service
+    userController := controllers.NewUserController()
+    protos.RegisterUserServer(facades.Grpc().Server(), userController)
+    
+    // Product service
+    productController := controllers.NewProductController()
+    protos.RegisterProductServer(facades.Grpc().Server(), productController)
+    
+    // Order service
+    orderController := controllers.NewOrderController()
+    protos.RegisterOrderServer(facades.Grpc().Server(), orderController)
+}
+```
+
+### Register Routing
+```go
+// app/providers/grpc_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/contracts/foundation"
+    "goravel/routes"
+)
+
+type GrpcServiceProvider struct {
+}
+
+func (sp *GrpcServiceProvider) Register(app foundation.Application) {
+    // Register gRPC services
+}
+
+func (sp *GrpcServiceProvider) Boot(app foundation.Application) {
+    // Register gRPC routes
+    routes.Grpc()
+}
+```
+
+## Server Management
+
+### Start gRPC Server
+```go
+// main.go
+package main
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/bootstrap"
+)
+
+func main() {
+    bootstrap.Boot()
+
+    // Start gRPC server
+    go func() {
+        if err := facades.Grpc().Run(); err != nil {
+            facades.Log().Errorf("gRPC run error: %v", err)
+        }
+    }()
+
+    // Start HTTP server
+    go func() {
+        if err := facades.Route().Run(); err != nil {
+            facades.Log().Errorf("Route run error: %v", err)
+        }
+    }()
+
+    select {}
+}
+```
+
+### Graceful Shutdown
+```go
+// main.go
+package main
+
+import (
+    "os"
+    "os/signal"
+    "syscall"
+
+    "github.com/goravel/framework/facades"
+    "goravel/bootstrap"
+)
+
+func main() {
+    bootstrap.Boot()
+
+    // Create a channel to listen for OS signals
+    quit := make(chan os.Signal)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+    // Start gRPC server
+    go func() {
+        if err := facades.Grpc().Run(); err != nil {
+            facades.Log().Errorf("gRPC run error: %v", err)
+        }
+    }()
+
+    // Start HTTP server
+    go func() {
+        if err := facades.Route().Run(); err != nil {
+            facades.Log().Errorf("Route run error: %v", err)
+        }
+    }()
+
+    // Listen for the OS signal
+    go func() {
+        <-quit
+        if err := facades.Grpc().Shutdown(); err != nil {
+            facades.Log().Errorf("gRPC Shutdown error: %v", err)
+        }
+        if err := facades.Route().Shutdown(); err != nil {
+            facades.Log().Errorf("Route Shutdown error: %v", err)
+        }
+        os.Exit(0)
+    }()
+
+    select {}
+}
+```
+
+## Interceptors
+
+### Server Interceptors
+```go
+// app/grpc/interceptors/server_interceptor.go
+package interceptors
+
+import (
+    "context"
+    "time"
+
+    "github.com/goravel/framework/facades"
+    "google.golang.org/grpc"
+)
+
+func Server(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+    start := time.Now()
+
+    // Log request
+    facades.Log().Info("gRPC Server Request", map[string]any{
+        "method": info.FullMethod,
+        "start":  start,
+    })
+
+    // Call handler
+    resp, err := handler(ctx, req)
+
+    // Log response
+    duration := time.Since(start)
+    facades.Log().Info("gRPC Server Response", map[string]any{
+        "method":   info.FullMethod,
+        "duration": duration,
+        "error":    err != nil,
+    })
+
+    return resp, err
+}
+```
+
+### Client Interceptors
+```go
+// app/grpc/interceptors/client_interceptor.go
+package interceptors
+
+import (
+    "context"
+    "time"
+
+    "github.com/goravel/framework/facades"
+    "google.golang.org/grpc"
+)
+
+func Client(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+    start := time.Now()
+
+    // Log request
+    facades.Log().Info("gRPC Client Request", map[string]any{
+        "method": method,
+        "start":  start,
+    })
+
+    // Call invoker
+    err := invoker(ctx, method, req, reply, cc, opts...)
+
+    // Log response
+    duration := time.Since(start)
+    facades.Log().Info("gRPC Client Response", map[string]any{
+        "method":   method,
+        "duration": duration,
+        "error":    err != nil,
+    })
+
+    return err
+}
+```
+
+### Register Interceptors
+```go
+// app/grpc/kernel.go
+package grpc
+
+import (
+    "goravel/app/grpc/interceptors"
+
+    "google.golang.org/grpc"
+)
+
+type Kernel struct {
+}
+
+func (kernel *Kernel) UnaryServerInterceptors() []grpc.UnaryServerInterceptor {
+    return []grpc.UnaryServerInterceptor{
+        interceptors.Server,
+        interceptors.Auth,
+        interceptors.Logging,
+    }
+}
+
+func (kernel *Kernel) UnaryClientInterceptorGroups() map[string][]grpc.UnaryClientInterceptor {
+    return map[string][]grpc.UnaryClientInterceptor{
+        "trace": {
+            interceptors.Client,
+        },
+        "auth": {
+            interceptors.AuthClient,
+        },
+        "logging": {
+            interceptors.LoggingClient,
+        },
+    }
+}
+```
+
+## gRPC Clients
+
+### Client Configuration
+```go
+// config/grpc.go
+func init() {
+    config := facades.Config
+    config.Add("grpc", map[string]interface{}{
+        "host": config.Env("GRPC_HOST", ""),
+        "clients": map[string]any{
+            "user": map[string]any{
+                "host":         config.Env("GRPC_USER_HOST", ""),
+                "port":         config.Env("GRPC_USER_PORT", ""),
+                "interceptors": []string{"trace", "auth"},
+            },
+            "product": map[string]any{
+                "host":         config.Env("GRPC_PRODUCT_HOST", ""),
+                "port":         config.Env("GRPC_PRODUCT_PORT", ""),
+                "interceptors": []string{"trace"},
+            },
+        },
+    })
+}
+```
+
+### Using gRPC Clients
+```go
+// app/services/user_service.go
+package services
+
+import (
+    "context"
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/grpc/protos"
+)
+
+type UserService struct {
+}
+
+func NewUserService() *UserService {
+    return &UserService{}
+}
+
+func (s *UserService) GetUserFromRemote(ctx context.Context, userID int64) (*protos.UserData, error) {
+    // Get gRPC client
+    client := facades.Grpc().Client("user")
+    
+    // Create request
+    req := &protos.UserRequest{
+        UserId: userID,
+    }
+    
+    // Call remote service
+    resp, err := client.UserService().Show(ctx, req)
+    if err != nil {
+        return nil, err
+    }
+    
+    return resp.Data, nil
+}
+```
+
+## Protocol Buffers
+
+### Service Definition
+```protobuf
+// protos/user.proto
+syntax = "proto3";
+
+package user;
+
+service UserService {
+    rpc Show(UserRequest) returns (UserResponse);
+    rpc Create(CreateUserRequest) returns (UserResponse);
+    rpc Update(UpdateUserRequest) returns (UserResponse);
+    rpc Delete(DeleteUserRequest) returns (UserResponse);
+}
+
+message UserRequest {
+    int64 user_id = 1;
+}
+
+message CreateUserRequest {
+    string name = 1;
+    string email = 2;
+}
+
+message UpdateUserRequest {
+    int64 user_id = 1;
+    string name = 2;
+    string email = 3;
+}
+
+message DeleteUserRequest {
+    int64 user_id = 1;
+}
+
+message UserResponse {
+    int32 code = 1;
+    string message = 2;
+    UserData data = 3;
+}
+
+message UserData {
+    int64 id = 1;
+    string name = 2;
+    string email = 3;
+}
+```
+
+### Generate Go Code
+```bash
+# Generate Go code from protobuf
+protoc --go_out=. --go-grpc_out=. protos/user.proto
+```
+
+## Error Handling
+
+### gRPC Error Responses
+```go
+func (r *UserController) Show(ctx context.Context, req *protos.UserRequest) (*protos.UserResponse, error) {
+    // Validate request
+    if req.UserId <= 0 {
+        return &protos.UserResponse{
+            Code:    http.StatusBadRequest,
+            Message: "Invalid user ID",
+        }, nil
+    }
+
+    // Process request
+    user, err := r.userService.FindByID(req.UserId)
+    if err != nil {
+        if errors.Is(err, ErrUserNotFound) {
+            return &protos.UserResponse{
+                Code:    http.StatusNotFound,
+                Message: "User not found",
+            }, nil
+        }
+        
+        return &protos.UserResponse{
+            Code:    http.StatusInternalServerError,
+            Message: "Internal server error",
+        }, nil
+    }
+
+    return &protos.UserResponse{
+        Code:    http.StatusOK,
+        Message: "Success",
+        Data: &protos.UserData{
+            Id:    user.ID,
+            Name:  user.Name,
+            Email: user.Email,
+        },
+    }, nil
+}
+```
+
+## Testing gRPC
+
+### Unit Testing
+```go
+func TestUserController_Show(t *testing.T) {
+    // Create mock service
+    userService := &MockUserService{}
+    logger := &MockLogger{}
+    
+    // Create controller
+    controller := NewUserController(userService, logger)
+    
+    // Create request
+    req := &protos.UserRequest{
+        UserId: 1,
+    }
+    
+    // Test controller method
+    resp, err := controller.Show(context.Background(), req)
+    
+    // Assertions
+    assert.NoError(t, err)
+    assert.Equal(t, http.StatusOK, resp.Code)
+    assert.Equal(t, "Success", resp.Message)
+}
+```
+
+### Integration Testing
+```go
+func TestGrpcIntegration(t *testing.T) {
+    // Start gRPC server
+    go func() {
+        if err := facades.Grpc().Run(); err != nil {
+            t.Fatalf("gRPC run error: %v", err)
+        }
+    }()
+    
+    // Wait for server to start
+    time.Sleep(100 * time.Millisecond)
+    
+    // Test gRPC client
+    client := facades.Grpc().Client("user")
+    req := &protos.UserRequest{UserId: 1}
+    
+    resp, err := client.UserService().Show(context.Background(), req)
+    assert.NoError(t, err)
+    assert.Equal(t, http.StatusOK, resp.Code)
+}
+```
+
+## Best Practices
+
+### Performance Considerations
+- **Connection Pooling**: Use connection pooling for gRPC clients
+- **Streaming**: Use streaming for large data transfers
+- **Compression**: Enable gRPC compression for better performance
+- **Load Balancing**: Implement load balancing for gRPC services
+
+### Security Considerations
+- **Authentication**: Implement proper authentication in interceptors
+- **Authorization**: Check permissions in interceptors
+- **TLS**: Use TLS for secure gRPC communication
+- **Input Validation**: Validate all gRPC requests
+
+### Monitoring and Logging
+- **Request Logging**: Log all gRPC requests and responses
+- **Performance Metrics**: Monitor gRPC performance
+- **Error Tracking**: Track and monitor gRPC errors
+- **Health Checks**: Implement health checks for gRPC services
+
+## Development Guidelines
+
+### Service Organization
+- **Domain-based**: Organize gRPC services by domain
+- **Clear Naming**: Use descriptive names for services and methods
+- **Documentation**: Document gRPC service contracts
+- **Versioning**: Implement proper service versioning
+
+### Error Handling
+- **Consistent Errors**: Use consistent error response format
+- **Error Codes**: Use appropriate HTTP status codes
+- **Error Messages**: Provide meaningful error messages
+- **Error Logging**: Log errors for debugging
+
+### Testing Strategy
+- **Unit Tests**: Test individual gRPC methods
+- **Integration Tests**: Test complete gRPC workflows
+- **Mock Services**: Mock external gRPC services
+- **Performance Tests**: Test gRPC performance under load

@@ -1,0 +1,905 @@
+---
+alwaysApply: true
+---
+
+# Goravel Authorization System
+
+Based on the [official Goravel authorization documentation](https://www.goravel.dev/security/authorization.html).
+
+## Authorization Overview
+
+### Introduction
+- **Built-in Authorization**: Goravel offers built-in authentication services and an easy-to-use authorization feature to manage user actions on resources
+- **Resource Protection**: Even if a user is authenticated, they may not have the authority to modify or delete certain Eloquent models or database records
+- **Systematic Management**: Goravel's authorization feature allows for a systematic way of managing these authorization checks
+- **Two Approaches**: Gates and policies provide different approaches to authorization
+
+### Key Concepts
+- **Gates**: Closures that verify whether a user is authorized to perform a specific action
+- **Policies**: Group logic around a specific resource, similar to controllers
+- **Authorization Checks**: Systematic way of managing user permissions
+- **Resource Protection**: Control access to specific resources and actions
+
+### Authorization Methods
+- **Gates**: Simple closure-based authorization for specific actions
+- **Policies**: Resource-focused authorization with multiple methods
+- **Combined Approach**: Most applications use a combination of both gates and policies
+
+## Gates
+
+### Writing Gates
+
+#### Basic Gate Definition
+```go
+// app/providers/auth_service_provider.go
+package providers
+
+import (
+    "context"
+    "goravel/app/models"
+    
+    contractsaccess "github.com/goravel/framework/contracts/auth/access"
+    "github.com/goravel/framework/auth/access"
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/contracts/foundation"
+)
+
+type AuthServiceProvider struct {
+}
+
+func (receiver *AuthServiceProvider) Register(app foundation.Application) {
+    // Service registration
+}
+
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    // Define gate for updating posts
+    facades.Gate().Define("update-post",
+        func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+            user := ctx.Value("user").(models.User)
+            post := arguments["post"].(models.Post)
+
+            if user.ID == post.UserID {
+                return access.NewAllowResponse()
+            } else {
+                return access.NewDenyResponse("You do not own this post")
+            }
+        },
+    )
+}
+```
+
+#### Multiple Gate Definitions
+```go
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    // Update post gate
+    facades.Gate().Define("update-post",
+        func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+            user := ctx.Value("user").(models.User)
+            post := arguments["post"].(models.Post)
+
+            if user.ID == post.UserID {
+                return access.NewAllowResponse()
+            } else {
+                return access.NewDenyResponse("You do not own this post")
+            }
+        },
+    )
+
+    // Delete post gate
+    facades.Gate().Define("delete-post",
+        func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+            user := ctx.Value("user").(models.User)
+            post := arguments["post"].(models.Post)
+
+            if user.ID == post.UserID {
+                return access.NewAllowResponse()
+            } else {
+                return access.NewDenyResponse("You do not own this post")
+            }
+        },
+    )
+
+    // View post gate
+    facades.Gate().Define("view-post",
+        func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+            user := ctx.Value("user").(models.User)
+            post := arguments["post"].(models.Post)
+
+            // Allow if user owns post or post is published
+            if user.ID == post.UserID || post.Status == "published" {
+                return access.NewAllowResponse()
+            } else {
+                return access.NewDenyResponse("You cannot view this post")
+            }
+        },
+    )
+}
+```
+
+#### Advanced Gate Logic
+```go
+// Gate with role-based authorization
+facades.Gate().Define("admin-access",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        
+        // Check if user is admin
+        if user.Role == "admin" {
+            return access.NewAllowResponse()
+        }
+        
+        return access.NewDenyResponse("Admin access required")
+    },
+)
+
+// Gate with complex business logic
+facades.Gate().Define("edit-settings",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        settings := arguments["settings"].(models.Settings)
+        
+        // Allow if user owns settings or is admin
+        if user.ID == settings.UserID || user.Role == "admin" {
+            return access.NewAllowResponse()
+        }
+        
+        // Check if user has specific permission
+        if user.HasPermission("edit-settings") {
+            return access.NewAllowResponse()
+        }
+        
+        return access.NewDenyResponse("You do not have permission to edit settings")
+    },
+)
+```
+
+### Authorizing Actions
+
+#### Basic Authorization
+```go
+// app/http/controllers/post_controller.go
+package controllers
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/contracts/http"
+)
+
+type PostController struct {
+}
+
+func (r *PostController) Update(ctx http.Context) http.Response {
+    var post models.Post
+    // Load post from database
+    
+    // Check if user can update post
+    if facades.Gate().Allows("update-post", map[string]any{
+        "post": post,
+    }) {
+        // User can update post
+        // Perform update logic
+        return ctx.Response().Success().Json(http.Json{
+            "message": "Post updated successfully",
+        })
+    } else {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "You do not have permission to update this post",
+        })
+    }
+}
+```
+
+#### Using Denies Method
+```go
+func (r *PostController) Delete(ctx http.Context) http.Response {
+    var post models.Post
+    // Load post from database
+    
+    // Check if user cannot delete post
+    if facades.Gate().Denies("delete-post", map[string]any{
+        "post": post,
+    }) {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "You do not have permission to delete this post",
+        })
+    }
+    
+    // User can delete post
+    // Perform delete logic
+    return ctx.Response().Success().Json(http.Json{
+        "message": "Post deleted successfully",
+    })
+}
+```
+
+#### Multiple Action Authorization
+```go
+// Check if user can perform any of multiple actions
+if facades.Gate().Any([]string{"update-post", "delete-post"}, map[string]any{
+    "post": post,
+}) {
+    // User can update or delete the post
+    // Show edit/delete buttons
+}
+
+// Check if user cannot perform any of multiple actions
+if facades.Gate().None([]string{"update-post", "delete-post"}, map[string]any{
+    "post": post,
+}) {
+    // User cannot update or delete the post
+    // Hide edit/delete buttons
+}
+```
+
+#### Complex Authorization Logic
+```go
+func (r *PostController) Show(ctx http.Context) http.Response {
+    var post models.Post
+    // Load post from database
+    
+    // Check multiple conditions
+    canView := facades.Gate().Allows("view-post", map[string]any{
+        "post": post,
+    })
+    
+    canEdit := facades.Gate().Allows("update-post", map[string]any{
+        "post": post,
+    })
+    
+    canDelete := facades.Gate().Allows("delete-post", map[string]any{
+        "post": post,
+    })
+    
+    if !canView {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "You do not have permission to view this post",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "post": post,
+        "permissions": map[string]bool{
+            "can_edit":   canEdit,
+            "can_delete": canDelete,
+        },
+    })
+}
+```
+
+### Gate Responses
+
+#### Using Inspect Method
+```go
+// Get full authorization response
+response := facades.Gate().Inspect("edit-settings", map[string]any{
+    "settings": settings,
+})
+
+if response.Allowed() {
+    // The action is authorized
+    // Perform the action
+} else {
+    // The action is denied
+    fmt.Println("Authorization denied:", response.Message())
+    return ctx.Response().Json(http.StatusForbidden, http.Json{
+        "error": response.Message(),
+    })
+}
+```
+
+#### Custom Response Handling
+```go
+func (r *PostController) Update(ctx http.Context) http.Response {
+    var post models.Post
+    // Load post from database
+    
+    response := facades.Gate().Inspect("update-post", map[string]any{
+        "post": post,
+    })
+    
+    if !response.Allowed() {
+        // Log the authorization failure
+        facades.Log().Warning("Authorization failed", map[string]any{
+            "user_id": ctx.Value("user").(models.User).ID,
+            "post_id": post.ID,
+            "reason":   response.Message(),
+        })
+        
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": response.Message(),
+        })
+    }
+    
+    // User is authorized
+    // Perform update logic
+    return ctx.Response().Success().Json(http.Json{
+        "message": "Post updated successfully",
+    })
+}
+```
+
+### Intercepting Gate Checks
+
+#### Before Method
+```go
+// Grant all abilities to administrators
+facades.Gate().Before(func(ctx context.Context, ability string, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    
+    if isAdministrator(user) {
+        return access.NewAllowResponse()
+    }
+    
+    // Return nil to continue with normal authorization
+    return nil
+})
+
+// Helper function to check if user is administrator
+func isAdministrator(user models.User) bool {
+    return user.Role == "admin" || user.Role == "super_admin"
+}
+```
+
+#### After Method
+```go
+// Override authorization for specific users
+facades.Gate().After(func(ctx context.Context, ability string, arguments map[string]any, result contractsaccess.Response) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    
+    // Override if user is super admin
+    if user.Role == "super_admin" {
+        return access.NewAllowResponse()
+    }
+    
+    // Return the original result
+    return result
+})
+```
+
+#### Complex Interception Logic
+```go
+// Before method with complex logic
+facades.Gate().Before(func(ctx context.Context, ability string, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    
+    // Grant all permissions to super admin
+    if user.Role == "super_admin" {
+        return access.NewAllowResponse()
+    }
+    
+    // Grant specific permissions to admin
+    if user.Role == "admin" {
+        adminPermissions := []string{"view-post", "update-post", "delete-post"}
+        for _, permission := range adminPermissions {
+            if ability == permission {
+                return access.NewAllowResponse()
+            }
+        }
+    }
+    
+    // Continue with normal authorization
+    return nil
+})
+```
+
+### Inject Context
+
+#### Using WithContext
+```go
+// Inject context into gate checks
+func (r *PostController) Update(ctx http.Context) http.Response {
+    var post models.Post
+    // Load post from database
+    
+    // Use WithContext to pass HTTP context
+    if facades.Gate().WithContext(ctx).Allows("update-post", map[string]any{
+        "post": post,
+    }) {
+        // User can update post
+        // Perform update logic
+        return ctx.Response().Success().Json(http.Json{
+            "message": "Post updated successfully",
+        })
+    } else {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "You do not have permission to update this post",
+        })
+    }
+}
+```
+
+#### Context-Aware Gates
+```go
+// Gate that uses HTTP context
+facades.Gate().Define("rate-limited-action",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        
+        // Get HTTP context from arguments
+        httpCtx := arguments["http_context"].(http.Context)
+        
+        // Check rate limiting
+        if isRateLimited(httpCtx, user.ID) {
+            return access.NewDenyResponse("Rate limit exceeded")
+        }
+        
+        return access.NewAllowResponse()
+    },
+)
+```
+
+## Policies
+
+### Generating Policies
+
+#### Basic Policy Generation
+```bash
+# Generate basic policy
+go run . artisan make:policy PostPolicy
+
+# Generate policy in nested folder
+go run . artisan make:policy user/PostPolicy
+```
+
+#### Policy Structure
+```go
+// app/policies/post_policy.go
+package policies
+
+import (
+    "context"
+    "goravel/app/models"
+    
+    "github.com/goravel/framework/auth/access"
+    contractsaccess "github.com/goravel/framework/contracts/auth/access"
+)
+
+type PostPolicy struct {
+}
+
+func NewPostPolicy() *PostPolicy {
+    return &PostPolicy{}
+}
+```
+
+### Writing Policies
+
+#### Basic Policy Methods
+```go
+// app/policies/post_policy.go
+package policies
+
+import (
+    "context"
+    "goravel/app/models"
+    
+    "github.com/goravel/framework/auth/access"
+    contractsaccess "github.com/goravel/framework/contracts/auth/access"
+)
+
+type PostPolicy struct {
+}
+
+func NewPostPolicy() *PostPolicy {
+    return &PostPolicy{}
+}
+
+// Update method
+func (r *PostPolicy) Update(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+
+    if user.ID == post.UserID {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You do not own this post.")
+    }
+}
+
+// Delete method
+func (r *PostPolicy) Delete(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+
+    if user.ID == post.UserID {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You do not own this post.")
+    }
+}
+
+// View method
+func (r *PostPolicy) View(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+
+    // Allow if user owns post or post is published
+    if user.ID == post.UserID || post.Status == "published" {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You cannot view this post.")
+    }
+}
+```
+
+#### Advanced Policy Methods
+```go
+// Create method
+func (r *PostPolicy) Create(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    
+    // Check if user can create posts
+    if user.Role == "admin" || user.Role == "author" {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You do not have permission to create posts.")
+    }
+}
+
+// Publish method
+func (r *PostPolicy) Publish(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+    
+    // Only admin or post owner can publish
+    if user.Role == "admin" || user.ID == post.UserID {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You do not have permission to publish this post.")
+    }
+}
+
+// Archive method
+func (r *PostPolicy) Archive(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+    
+    // Only admin or post owner can archive
+    if user.Role == "admin" || user.ID == post.UserID {
+        return access.NewAllowResponse()
+    } else {
+        return access.NewDenyResponse("You do not have permission to archive this post.")
+    }
+}
+```
+
+#### Complex Policy Logic
+```go
+// Policy with complex business logic
+func (r *PostPolicy) Moderate(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+    
+    // Only moderators and admins can moderate
+    if user.Role == "moderator" || user.Role == "admin" {
+        return access.NewAllowResponse()
+    }
+    
+    // Check if user has specific permission
+    if user.HasPermission("moderate-posts") {
+        return access.NewAllowResponse()
+    }
+    
+    return access.NewDenyResponse("You do not have permission to moderate this post.")
+}
+
+// Policy with time-based logic
+func (r *PostPolicy) Edit(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+    user := ctx.Value("user").(models.User)
+    post := arguments["post"].(models.Post)
+    
+    // Check if user owns the post
+    if user.ID != post.UserID {
+        return access.NewDenyResponse("You do not own this post.")
+    }
+    
+    // Check if post is editable (not published or within edit window)
+    if post.Status == "published" && post.PublishedAt.Before(time.Now().Add(-24*time.Hour)) {
+        return access.NewDenyResponse("You cannot edit published posts older than 24 hours.")
+    }
+    
+    return access.NewAllowResponse()
+}
+```
+
+### Registering Policies
+
+#### Basic Policy Registration
+```go
+// app/providers/auth_service_provider.go
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    // Register policy methods as gates
+    facades.Gate().Define("update-post", policies.NewPostPolicy().Update)
+    facades.Gate().Define("delete-post", policies.NewPostPolicy().Delete)
+    facades.Gate().Define("view-post", policies.NewPostPolicy().View)
+    facades.Gate().Define("create-post", policies.NewPostPolicy().Create)
+    facades.Gate().Define("publish-post", policies.NewPostPolicy().Publish)
+    facades.Gate().Define("archive-post", policies.NewPostPolicy().Archive)
+}
+```
+
+#### Advanced Policy Registration
+```go
+// Register multiple policies
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    // Post policies
+    postPolicy := policies.NewPostPolicy()
+    facades.Gate().Define("update-post", postPolicy.Update)
+    facades.Gate().Define("delete-post", postPolicy.Delete)
+    facades.Gate().Define("view-post", postPolicy.View)
+    
+    // User policies
+    userPolicy := policies.NewUserPolicy()
+    facades.Gate().Define("update-user", userPolicy.Update)
+    facades.Gate().Define("delete-user", userPolicy.Delete)
+    
+    // Comment policies
+    commentPolicy := policies.NewCommentPolicy()
+    facades.Gate().Define("update-comment", commentPolicy.Update)
+    facades.Gate().Define("delete-comment", commentPolicy.Delete)
+}
+```
+
+## Advanced Authorization Patterns
+
+### Role-Based Authorization
+```go
+// Role-based gate
+facades.Gate().Define("admin-only",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        
+        if user.Role == "admin" {
+            return access.NewAllowResponse()
+        }
+        
+        return access.NewDenyResponse("Admin access required")
+    },
+)
+
+// Permission-based gate
+facades.Gate().Define("manage-users",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        
+        if user.HasPermission("manage-users") {
+            return access.NewAllowResponse()
+        }
+        
+        return access.NewDenyResponse("Permission required: manage-users")
+    },
+)
+```
+
+### Resource-Based Authorization
+```go
+// Resource ownership check
+facades.Gate().Define("own-resource",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        resource := arguments["resource"].(models.Resource)
+        
+        if user.ID == resource.UserID {
+            return access.NewAllowResponse()
+        }
+        
+        return access.NewDenyResponse("You do not own this resource")
+    },
+)
+```
+
+### Time-Based Authorization
+```go
+// Time-based gate
+facades.Gate().Define("edit-within-timeframe",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        resource := arguments["resource"].(models.Resource)
+        
+        // Check if user owns resource
+        if user.ID != resource.UserID {
+            return access.NewDenyResponse("You do not own this resource")
+        }
+        
+        // Check if within edit timeframe (24 hours)
+        if time.Since(resource.CreatedAt) > 24*time.Hour {
+            return access.NewDenyResponse("Edit window has expired")
+        }
+        
+        return access.NewAllowResponse()
+    },
+)
+```
+
+### Conditional Authorization
+```go
+// Conditional gate based on resource state
+facades.Gate().Define("edit-draft",
+    func(ctx context.Context, arguments map[string]any) contractsaccess.Response {
+        user := ctx.Value("user").(models.User)
+        post := arguments["post"].(models.Post)
+        
+        // Only allow editing if post is draft
+        if post.Status != "draft" {
+            return access.NewDenyResponse("Can only edit draft posts")
+        }
+        
+        // Check ownership
+        if user.ID != post.UserID {
+            return access.NewDenyResponse("You do not own this post")
+        }
+        
+        return access.NewAllowResponse()
+    },
+)
+```
+
+## Authorization Middleware
+
+### Basic Authorization Middleware
+```go
+// Authorization middleware
+func AuthorizeMiddleware(ability string) http.Middleware {
+    return func(ctx http.Context) {
+        // Get resource from route parameters
+        resourceID := ctx.Request().Route("id")
+        var resource models.Resource
+        
+        // Load resource from database
+        if err := facades.Orm().Query().Where("id", resourceID).First(&resource); err != nil {
+            ctx.Response().Json(http.StatusNotFound, http.Json{
+                "error": "Resource not found",
+            })
+            return
+        }
+        
+        // Check authorization
+        if !facades.Gate().Allows(ability, map[string]any{
+            "resource": resource,
+        }) {
+            ctx.Response().Json(http.StatusForbidden, http.Json{
+                "error": "You do not have permission to perform this action",
+            })
+            return
+        }
+        
+        // Continue to next middleware/handler
+        ctx.Next()
+    }
+}
+```
+
+### Advanced Authorization Middleware
+```go
+// Advanced authorization middleware with context injection
+func AdvancedAuthorizeMiddleware(ability string) http.Middleware {
+    return func(ctx http.Context) {
+        // Get resource from route parameters
+        resourceID := ctx.Request().Route("id")
+        var resource models.Resource
+        
+        // Load resource from database
+        if err := facades.Orm().Query().Where("id", resourceID).First(&resource); err != nil {
+            ctx.Response().Json(http.StatusNotFound, http.Json{
+                "error": "Resource not found",
+            })
+            return
+        }
+        
+        // Check authorization with context
+        if !facades.Gate().WithContext(ctx).Allows(ability, map[string]any{
+            "resource": resource,
+        }) {
+            // Log authorization failure
+            facades.Log().Warning("Authorization failed", map[string]any{
+                "user_id":     ctx.Value("user").(models.User).ID,
+                "resource_id": resource.ID,
+                "ability":     ability,
+            })
+            
+            ctx.Response().Json(http.StatusForbidden, http.Json{
+                "error": "You do not have permission to perform this action",
+            })
+            return
+        }
+        
+        // Continue to next middleware/handler
+        ctx.Next()
+    }
+}
+```
+
+## Authorization Best Practices
+
+### Design Principles
+- **Clear Separation**: Separate authorization logic from business logic
+- **Consistent Patterns**: Use consistent patterns for authorization checks
+- **Resource Focus**: Focus on resource-based authorization when possible
+- **Performance**: Consider performance implications of authorization checks
+
+### Security Considerations
+- **Principle of Least Privilege**: Grant minimum necessary permissions
+- **Input Validation**: Validate all inputs in authorization logic
+- **Audit Logging**: Log authorization decisions for security auditing
+- **Error Handling**: Handle authorization errors gracefully
+
+### Performance Considerations
+- **Caching**: Cache authorization decisions when appropriate
+- **Database Optimization**: Optimize database queries in authorization logic
+- **Lazy Loading**: Load resources only when needed
+- **Monitoring**: Monitor authorization performance
+
+## Development Guidelines
+
+### Authorization Organization
+- **Policy Organization**: Organize policies by resource type
+- **Gate Organization**: Group related gates together
+- **Middleware Usage**: Use middleware for common authorization patterns
+- **Testing**: Test authorization logic thoroughly
+
+### Testing Authorization
+```go
+// Test authorization functionality
+func TestAuthorization(t *testing.T) {
+    // Test gate authorization
+    user := &models.User{ID: 1, Role: "user"}
+    post := &models.Post{ID: 1, UserID: 1}
+    
+    // Mock context
+    ctx := context.WithValue(context.Background(), "user", user)
+    
+    // Test authorization
+    allowed := facades.Gate().WithContext(ctx).Allows("update-post", map[string]any{
+        "post": post,
+    })
+    
+    assert.True(t, allowed)
+}
+
+// Test policy authorization
+func TestPolicyAuthorization(t *testing.T) {
+    policy := policies.NewPostPolicy()
+    user := &models.User{ID: 1, Role: "user"}
+    post := &models.Post{ID: 1, UserID: 1}
+    
+    ctx := context.WithValue(context.Background(), "user", user)
+    
+    response := policy.Update(ctx, map[string]any{
+        "post": post,
+    })
+    
+    assert.True(t, response.Allowed())
+}
+```
+
+### Monitoring and Maintenance
+- **Authorization Metrics**: Monitor authorization success/failure rates
+- **Performance Monitoring**: Monitor authorization performance
+- **Security Events**: Monitor authorization-related security events
+- **Audit Logging**: Log authorization decisions for auditing
+
+## Best Practices
+
+### Authorization Design
+- **Consistent API**: Use consistent patterns for authorization
+- **Clear Naming**: Use clear, descriptive names for gates and policies
+- **Error Handling**: Handle authorization errors gracefully
+- **Documentation**: Document authorization logic and requirements
+
+### Security
+- **Input Validation**: Validate all inputs in authorization logic
+- **Principle of Least Privilege**: Grant minimum necessary permissions
+- **Audit Logging**: Log all authorization decisions
+- **Regular Review**: Regularly review authorization logic
+
+### Performance
+- **Efficient Checks**: Optimize authorization checks for performance
+- **Caching**: Cache authorization decisions when appropriate
+- **Database Optimization**: Optimize database queries in authorization
+- **Monitoring**: Monitor authorization performance
+
+### Reliability
+- **Error Handling**: Handle all authorization errors
+- **Fallback Mechanisms**: Implement fallback mechanisms for authorization failures
+- **Testing**: Test authorization thoroughly
+- **Monitoring**: Monitor authorization system health

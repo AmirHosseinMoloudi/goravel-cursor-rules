@@ -1,0 +1,351 @@
+---
+alwaysApply: true
+---
+
+# Goravel Routing System
+
+Based on the [official Goravel routing documentation](https://www.goravel.dev/the-basics/routing.html).
+
+## Routing Overview
+
+### Introduction
+- **Route Facade**: Operated by `facades.Route()`
+- **HTTP Drivers**: Gin (default) and Fiber support
+- **Route Files**: Located in [routes/](mdc:routes/) directory
+- **Route Binding**: Registered in [app/providers/route_service_provider.go](mdc:app/providers/route_service_provider.go)
+
+### HTTP Drivers
+- **Gin**: Default HTTP driver ([github.com/goravel/gin](https://github.com/goravel/gin))
+- **Fiber**: Alternative HTTP driver ([github.com/goravel/fiber](https://github.com/goravel/fiber))
+- **Configuration**: Configure in [config/http.go](mdc:config/http.go)
+
+## Server Management
+
+### Starting HTTP Server
+```go
+// main.go - Start HTTP server
+func main() {
+    bootstrap.Boot()
+    
+    go func() {
+        if err := facades.Route().Run(); err != nil {
+            facades.Log().Errorf("Route run error: %v", err)
+        }
+    }()
+    
+    select {}
+}
+```
+
+### Starting HTTPS Server
+```go
+// Basic HTTPS with configuration
+if err := facades.Route().RunTLS(); err != nil {
+    facades.Log().Errorf("Route run error: %v", err)
+}
+
+// Custom HTTPS with certificates
+if err := facades.Route().RunTLSWithCert("127.0.0.1:3000", "ca.pem", "ca.key"); err != nil {
+    facades.Log().Errorf("Route run error: %v", err)
+}
+```
+
+### Graceful Shutdown
+```go
+// Graceful server shutdown
+quit := make(chan os.Signal)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+go func() {
+    <-quit
+    if err := facades.Route().Shutdown(); err != nil {
+        facades.Log().Errorf("Route shutdown error: %v", err)
+    }
+    os.Exit(0)
+}()
+```
+
+## Basic Routing
+
+### HTTP Methods
+```go
+// Basic route definitions
+facades.Route().Get("/", func(ctx http.Context) http.Response {
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "Hello": "Goravel",
+    })
+})
+
+facades.Route().Post("/", userController.Show)
+facades.Route().Put("/", userController.Show)
+facades.Route().Delete("/", userController.Show)
+facades.Route().Patch("/", userController.Show)
+facades.Route().Options("/", userController.Show)
+facades.Route().Any("/", userController.Show)
+```
+
+### Route Parameters
+```go
+// Route with parameters
+facades.Route().Get("/input/{id}", func(ctx http.Context) http.Response {
+    return ctx.Response().Success().Json(http.Json{
+        "id": ctx.Request().Input("id"),
+    })
+})
+```
+
+## Advanced Routing
+
+### Resource Routing
+```go
+// Resource controller with CRUD operations
+resourceController := NewResourceController()
+facades.Route().Resource("/resource", resourceController)
+
+type ResourceController struct{}
+
+func NewResourceController() *ResourceController {
+    return &ResourceController{}
+}
+
+// GET /resource
+func (c *ResourceController) Index(ctx http.Context) {}
+// GET /resource/{id}
+func (c *ResourceController) Show(ctx http.Context) {}
+// POST /resource
+func (c *ResourceController) Store(ctx http.Context) {}
+// PUT /resource/{id}
+func (c *ResourceController) Update(ctx http.Context) {}
+// DELETE /resource/{id}
+func (c *ResourceController) Destroy(ctx http.Context) {}
+```
+
+### Group Routing
+```go
+// Route groups for organization
+facades.Route().Group(func(router route.Router) {
+    router.Get("group/{id}", func(ctx http.Context) http.Response {
+        return ctx.Response().Success().String(ctx.Request().Query("id", "1"))
+    })
+})
+```
+
+### Route Prefix
+```go
+// Route prefix for URL organization
+facades.Route().Prefix("users").Get("/", userController.Show)
+```
+
+### File Routing
+```go
+import "net/http"
+
+// Static file serving
+facades.Route().Static("static", "./public")
+facades.Route().StaticFile("static-file", "./public/logo.png")
+facades.Route().StaticFS("static-fs", http.Dir("./public"))
+```
+
+## Route Management
+
+### Route Naming
+```go
+// Named routes for URL generation
+facades.Route().Get("users", userController.Index).Name("users.index")
+```
+
+### Route Information
+```go
+// Get route information
+route := facades.Route().Info("users.index")
+routes := facades.Route().GetRoutes()
+```
+
+### Fallback Routes
+```go
+// Fallback for unmatched routes
+facades.Route().Fallback(func(ctx http.Context) http.Response {
+    return ctx.Response().String(404, "not found")
+})
+```
+
+## Middleware Integration
+
+### Basic Middleware
+```go
+import "github.com/goravel/framework/http/middleware"
+
+// Apply middleware to routes
+facades.Route().Middleware(middleware.Cors()).Get("users", userController.Show)
+```
+
+### Middleware Groups
+```go
+// Apply middleware to route groups
+facades.Route().Group(func(router route.Router) {
+    router.Middleware(middleware.Auth()).Group(func(auth route.Router) {
+        auth.Get("/profile", userController.Profile)
+        auth.Put("/profile", userController.UpdateProfile)
+    })
+})
+```
+
+## Rate Limiting
+
+### Defining Rate Limiters
+```go
+import (
+    contractshttp "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/http/limit"
+)
+
+func (receiver *RouteServiceProvider) configureRateLimiting() {
+    // Basic rate limiter
+    facades.RateLimiter().For("global", func(ctx contractshttp.Context) contractshttp.Limit {
+        return limit.PerMinute(1000)
+    })
+    
+    // Custom response for rate limit exceeded
+    facades.RateLimiter().For("api", func(ctx contractshttp.Context) contractshttp.Limit {
+        return limit.PerMinute(100).Response(func(ctx http.Context) {
+            ctx.Request().AbortWithStatus(http.StatusTooManyRequests)
+        })
+    })
+}
+```
+
+### Dynamic Rate Limiting
+```go
+// Dynamic rate limiting based on user type
+facades.RateLimiter().For("global", func(ctx contractshttp.Context) contractshttp.Limit {
+    if isVIP() {
+        return limit.PerMinute(1000)
+    }
+    return limit.PerMinute(100)
+})
+```
+
+### Segmented Rate Limiting
+```go
+// Rate limiting by IP address
+facades.RateLimiter().For("global", func(ctx contractshttp.Context) contractshttp.Limit {
+    if userID != 0 {
+        return limit.PerMinute(100).By(userID)
+    }
+    return limit.PerMinute(10).By(ctx.Request().Ip())
+})
+```
+
+### Multiple Rate Limits
+```go
+// Multiple rate limits for a single route
+facades.RateLimiter().ForWithLimits("login", func(ctx contractshttp.Context) []contractshttp.Limit {
+    return []contractshttp.Limit{
+        limit.PerMinute(500),
+        limit.PerMinute(100).By(ctx.Request().Ip()),
+    }
+})
+```
+
+### Applying Rate Limiters
+```go
+import "github.com/goravel/framework/http/middleware"
+
+// Apply rate limiter to routes
+facades.Route().Middleware(middleware.Throttle("global")).Get("/", func(ctx http.Context) http.Response {
+    return ctx.Response().Json(200, http.Json{
+        "Hello": "Goravel",
+    })
+})
+```
+
+## CORS Configuration
+
+### Default CORS
+- **Enabled by Default**: CORS is enabled by default
+- **Configuration**: Modify in [config/cors.go](mdc:config/cors.go)
+- **MDN Documentation**: For detailed CORS information
+
+### CORS Middleware
+```go
+// Apply CORS middleware
+facades.Route().Middleware(middleware.Cors()).Get("api/users", userController.Index)
+```
+
+## Route Organization
+
+### Route Files
+- **Default**: [routes/web.go](mdc:routes/web.go)
+- **Custom Routes**: Add files to [routes/](mdc:routes/) directory
+- **Registration**: Register in [app/providers/route_service_provider.go](mdc:app/providers/route_service_provider.go)
+
+### Route Service Provider
+```go
+// app/providers/route_service_provider.go
+func (receiver *RouteServiceProvider) Boot(app foundation.Application) {
+    // Register route files
+    facades.Route().Group(func(router route.Router) {
+        router.Get("/", func(ctx http.Context) http.Response {
+            return ctx.Response().Json(200, http.Json{"message": "Welcome"})
+        })
+    })
+}
+```
+
+## Development Guidelines
+
+### Route Organization
+- **Group Related Routes**: Use route groups for organization
+- **Use Prefixes**: Apply prefixes for URL structure
+- **Named Routes**: Use named routes for URL generation
+- **Resource Routes**: Use resource routes for CRUD operations
+
+### Performance Considerations
+- **Route Caching**: Cache routes in production
+- **Middleware Order**: Order middleware efficiently
+- **Rate Limiting**: Implement appropriate rate limiting
+- **Route Optimization**: Optimize route definitions
+
+### Security Best Practices
+- **Input Validation**: Validate route parameters
+- **Rate Limiting**: Implement rate limiting for API routes
+- **CORS Configuration**: Configure CORS appropriately
+- **Middleware Security**: Use security middleware
+
+## Testing Routes
+
+### Route Testing
+```go
+// Test route responses
+func TestUserRoute(t *testing.T) {
+    response := facades.Route().ServeHTTP("GET", "/users", nil)
+    assert.Equal(t, 200, response.StatusCode)
+}
+```
+
+### Route List Command
+```bash
+# View all registered routes
+./artisan route:list
+```
+
+## Best Practices
+
+### Route Design
+- **RESTful Design**: Follow RESTful conventions
+- **Clear URLs**: Use clear, descriptive URLs
+- **Consistent Naming**: Use consistent route naming
+- **Version Control**: Version API routes appropriately
+
+### Middleware Usage
+- **Selective Application**: Apply middleware selectively
+- **Performance**: Consider middleware performance impact
+- **Security**: Use security middleware appropriately
+- **Ordering**: Order middleware correctly
+
+### Error Handling
+- **Fallback Routes**: Implement fallback routes
+- **Error Responses**: Provide meaningful error responses
+- **Status Codes**: Use appropriate HTTP status codes
+- **Logging**: Log route errors appropriately

@@ -1,0 +1,755 @@
+---
+alwaysApply: true
+---
+
+# Goravel Hashing System
+
+Based on the [official Goravel hashing documentation](https://www.goravel.dev/security/hashing.html).
+
+## Hashing Overview
+
+### Introduction
+- **Secure Hashing**: Goravel's `facades.Hash()` provides secure Argon2id and Bcrypt hashing for storing user passwords
+- **Default Algorithm**: Argon2id is used for registration and authentication by default in Goravel application starter kits
+- **Multiple Drivers**: Support for Argon2id and Bcrypt hashing algorithms
+- **Password Security**: Designed specifically for secure password storage and verification
+
+### Key Concepts
+- **Hash Facade**: Access hashing functionality through `facades.Hash()`
+- **Argon2id**: Modern, secure password hashing algorithm (default)
+- **Bcrypt**: Widely-used password hashing algorithm
+- **Work Factor**: Configurable complexity for hashing operations
+
+## Configuration
+
+### Hashing Configuration
+```go
+// config/hashing.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("hashing", map[string]interface{}{
+        // Hashing Configuration
+        //
+        // Default hashing driver
+        "driver": config.Env("HASH_DRIVER", "argon2id"),
+
+        // Argon2id configuration
+        "argon2id": map[string]any{
+            "memory":      65536, // 64 MB
+            "time":        4,     // 4 iterations
+            "threads":     4,     // 4 threads
+            "key_length":  32,    // 32 bytes
+        },
+
+        // Bcrypt configuration
+        "bcrypt": map[string]any{
+            "rounds": 12, // 2^12 rounds
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Hashing configuration
+HASH_DRIVER=argon2id
+HASH_BCRYPT_ROUNDS=12
+HASH_ARGON2ID_MEMORY=65536
+HASH_ARGON2ID_TIME=4
+HASH_ARGON2ID_THREADS=4
+```
+
+### Driver Selection
+```go
+// Available hashing drivers
+const (
+    DriverArgon2id = "argon2id"
+    DriverBcrypt   = "bcrypt"
+)
+
+// Driver configuration
+"drivers": map[string]any{
+    "argon2id": map[string]any{
+        "driver": "argon2id",
+        "memory": 65536,
+        "time":   4,
+        "threads": 4,
+    },
+    "bcrypt": map[string]any{
+        "driver": "bcrypt",
+        "rounds": 12,
+    },
+}
+```
+
+## Basic Usage
+
+### Hashing Passwords
+
+#### Basic Password Hashing
+```go
+// Hash a password
+password, err := facades.Hash().Make("plain-text-password")
+if err != nil {
+    // Handle hashing error
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to hash password",
+    })
+}
+
+// Store hashed password in database
+user := models.User{
+    Password: password,
+}
+```
+
+#### User Registration with Password Hashing
+```go
+// User registration with password hashing
+func (c *UserController) Register(ctx http.Context) http.Response {
+    // Get user input
+    email := ctx.Request().Input("email")
+    password := ctx.Request().Input("password")
+    
+    // Validate input
+    if email == "" || password == "" {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Email and password are required",
+        })
+    }
+    
+    // Hash password
+    hashedPassword, err := facades.Hash().Make(password)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to hash password",
+        })
+    }
+    
+    // Create user
+    user := models.User{
+        Email:    email,
+        Password: hashedPassword,
+    }
+    
+    if err := facades.Orm().Query().Create(&user); err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "User registered successfully",
+        "user_id": user.ID,
+    })
+}
+```
+
+#### Password Hashing with Validation
+```go
+// Hash password with strength validation
+func hashPasswordWithValidation(password string) (string, error) {
+    // Validate password strength
+    if err := validatePasswordStrength(password); err != nil {
+        return "", err
+    }
+    
+    // Hash password
+    hashedPassword, err := facades.Hash().Make(password)
+    if err != nil {
+        return "", err
+    }
+    
+    return hashedPassword, nil
+}
+
+// Password strength validation
+func validatePasswordStrength(password string) error {
+    if len(password) < 8 {
+        return errors.New("password must be at least 8 characters long")
+    }
+    
+    // Add more validation rules as needed
+    return nil
+}
+```
+
+### Verifying That A Password Matches A Hash
+
+#### Basic Password Verification
+```go
+// Verify password matches hash
+if facades.Hash().Check("plain-text", hashedPassword) {
+    // The passwords match...
+    return ctx.Response().Success().Json(http.Json{
+        "message": "Password is correct",
+    })
+} else {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Invalid password",
+    })
+}
+```
+
+#### User Authentication with Password Verification
+```go
+// User login with password verification
+func (c *UserController) Login(ctx http.Context) http.Response {
+    // Get user input
+    email := ctx.Request().Input("email")
+    password := ctx.Request().Input("password")
+    
+    // Find user by email
+    var user models.User
+    if err := facades.Orm().Query().Where("email", email).First(&user); err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    // Verify password
+    if !facades.Hash().Check(password, user.Password) {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    // Generate authentication token
+    token, err := facades.Auth(ctx).Login(&user)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to generate token",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "token": token,
+        "user":  user,
+    })
+}
+```
+
+#### Password Change with Verification
+```go
+// Change password with current password verification
+func (c *UserController) ChangePassword(ctx http.Context) http.Response {
+    userID := ctx.Request().Route("id")
+    currentPassword := ctx.Request().Input("current_password")
+    newPassword := ctx.Request().Input("new_password")
+    
+    // Get user
+    var user models.User
+    if err := facades.Orm().Query().Where("id", userID).First(&user); err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Verify current password
+    if !facades.Hash().Check(currentPassword, user.Password) {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Current password is incorrect",
+        })
+    }
+    
+    // Hash new password
+    hashedNewPassword, err := facades.Hash().Make(newPassword)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to hash new password",
+        })
+    }
+    
+    // Update password
+    user.Password = hashedNewPassword
+    if err := facades.Orm().Query().Save(&user); err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to update password",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "Password updated successfully",
+    })
+}
+```
+
+### Determining If A Password Needs To Be Rehashed
+
+#### Basic Rehash Check
+```go
+// Check if password needs rehashing
+if facades.Hash().NeedsRehash(hashed) {
+    hashed = facades.Hash().Make("plain-text")
+}
+```
+
+#### Authentication with Rehashing
+```go
+// Authentication with automatic rehashing
+func (c *UserController) LoginWithRehash(ctx http.Context) http.Response {
+    email := ctx.Request().Input("email")
+    password := ctx.Request().Input("password")
+    
+    // Find user
+    var user models.User
+    if err := facades.Orm().Query().Where("email", email).First(&user); err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    // Verify password
+    if !facades.Hash().Check(password, user.Password) {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    // Check if password needs rehashing
+    if facades.Hash().NeedsRehash(user.Password) {
+        // Rehash password with current settings
+        newHashedPassword, err := facades.Hash().Make(password)
+        if err != nil {
+            return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+                "error": "Failed to rehash password",
+            })
+        }
+        
+        // Update user password
+        user.Password = newHashedPassword
+        if err := facades.Orm().Query().Save(&user); err != nil {
+            facades.Log().Warning("Failed to update rehashed password", map[string]any{
+                "user_id": user.ID,
+            })
+        }
+    }
+    
+    // Generate token
+    token, err := facades.Auth(ctx).Login(&user)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to generate token",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "token": token,
+        "user":  user,
+    })
+}
+```
+
+#### Batch Password Rehashing
+```go
+// Rehash all passwords with outdated hashing
+func rehashAllPasswords() error {
+    var users []models.User
+    
+    // Get all users
+    if err := facades.Orm().Query().Find(&users); err != nil {
+        return err
+    }
+    
+    for _, user := range users {
+        // Check if password needs rehashing
+        if facades.Hash().NeedsRehash(user.Password) {
+            // Generate temporary password for rehashing
+            // Note: In real scenario, you'd need user's current password
+            // This is just for demonstration
+            facades.Log().Info("User password needs rehashing", map[string]any{
+                "user_id": user.ID,
+            })
+        }
+    }
+    
+    return nil
+}
+```
+
+## Advanced Hashing Patterns
+
+### Service Layer Hashing
+```go
+// Hashing service
+type HashingService struct {
+}
+
+func NewHashingService() *HashingService {
+    return &HashingService{}
+}
+
+// Hash password with service
+func (s *HashingService) HashPassword(password string) (string, error) {
+    // Validate password
+    if err := s.validatePassword(password); err != nil {
+        return "", err
+    }
+    
+    // Hash password
+    return facades.Hash().Make(password)
+}
+
+// Verify password with service
+func (s *HashingService) VerifyPassword(password, hash string) bool {
+    return facades.Hash().Check(password, hash)
+}
+
+// Check if needs rehashing
+func (s *HashingService) NeedsRehash(hash string) bool {
+    return facades.Hash().NeedsRehash(hash)
+}
+
+// Validate password strength
+func (s *HashingService) validatePassword(password string) error {
+    if len(password) < 8 {
+        return errors.New("password must be at least 8 characters")
+    }
+    
+    if len(password) > 128 {
+        return errors.New("password must be less than 128 characters")
+    }
+    
+    return nil
+}
+```
+
+### Model Integration
+```go
+// User model with password hashing
+type User struct {
+    ID       uint   `gorm:"primaryKey"`
+    Email    string
+    Password string
+}
+
+// Hash password before saving
+func (u *User) BeforeSave() error {
+    if u.Password != "" && !strings.HasPrefix(u.Password, "$") {
+        // Only hash if not already hashed
+        hashedPassword, err := facades.Hash().Make(u.Password)
+        if err != nil {
+            return err
+        }
+        u.Password = hashedPassword
+    }
+    return nil
+}
+
+// Verify password method
+func (u *User) VerifyPassword(password string) bool {
+    return facades.Hash().Check(password, u.Password)
+}
+
+// Check if password needs rehashing
+func (u *User) NeedsPasswordRehash() bool {
+    return facades.Hash().NeedsRehash(u.Password)
+}
+```
+
+### Password Policy Integration
+```go
+// Password policy service
+type PasswordPolicyService struct {
+}
+
+func NewPasswordPolicyService() *PasswordPolicyService {
+    return &PasswordPolicyService{}
+}
+
+// Enforce password policy
+func (p *PasswordPolicyService) EnforcePolicy(password string) error {
+    // Minimum length
+    if len(password) < 8 {
+        return errors.New("password must be at least 8 characters long")
+    }
+    
+    // Maximum length
+    if len(password) > 128 {
+        return errors.New("password must be less than 128 characters")
+    }
+    
+    // Check for common passwords
+    if p.isCommonPassword(password) {
+        return errors.New("password is too common")
+    }
+    
+    // Check for user information
+    if p.containsUserInfo(password) {
+        return errors.New("password cannot contain user information")
+    }
+    
+    return nil
+}
+
+// Check if password is common
+func (p *PasswordPolicyService) isCommonPassword(password string) bool {
+    commonPasswords := []string{
+        "password", "123456", "qwerty", "abc123",
+        "password123", "admin", "letmein",
+    }
+    
+    for _, common := range commonPasswords {
+        if strings.ToLower(password) == common {
+            return true
+        }
+    }
+    
+    return false
+}
+
+// Check if password contains user information
+func (p *PasswordPolicyService) containsUserInfo(password string) bool {
+    // This would check against user's name, email, etc.
+    // Implementation depends on user data available
+    return false
+}
+```
+
+## Security Considerations
+
+### Timing Attack Prevention
+```go
+// Secure password verification with constant time
+func securePasswordCheck(password, hash string) bool {
+    // Use constant time comparison
+    return facades.Hash().Check(password, hash)
+}
+
+// Additional timing attack prevention
+func (c *UserController) SecureLogin(ctx http.Context) http.Response {
+    email := ctx.Request().Input("email")
+    password := ctx.Request().Input("password")
+    
+    // Always perform the same operations regardless of user existence
+    var user models.User
+    err := facades.Orm().Query().Where("email", email).First(&user)
+    
+    // Always hash the provided password
+    dummyHash, _ := facades.Hash().Make("dummy")
+    
+    // Always perform hash check
+    if err != nil || !facades.Hash().Check(password, user.Password) {
+        // Use dummy hash to prevent timing attacks
+        facades.Hash().Check(password, dummyHash)
+        
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    // Continue with successful authentication
+    return c.handleSuccessfulLogin(user)
+}
+```
+
+### Password History
+```go
+// Password history tracking
+type PasswordHistory struct {
+    ID        uint   `gorm:"primaryKey"`
+    UserID    uint
+    Password  string
+    CreatedAt time.Time
+}
+
+// Check password history
+func (s *HashingService) CheckPasswordHistory(userID uint, newPassword string) error {
+    var history []PasswordHistory
+    
+    // Get last 5 passwords
+    if err := facades.Orm().Query().
+        Where("user_id", userID).
+        Order("created_at DESC").
+        Limit(5).
+        Find(&history); err != nil {
+        return err
+    }
+    
+    // Check if new password matches any previous password
+    for _, record := range history {
+        if facades.Hash().Check(newPassword, record.Password) {
+            return errors.New("password has been used recently")
+        }
+    }
+    
+    return nil
+}
+
+// Save password to history
+func (s *HashingService) SavePasswordHistory(userID uint, password string) error {
+    history := PasswordHistory{
+        UserID:   userID,
+        Password: password,
+    }
+    
+    return facades.Orm().Query().Create(&history)
+}
+```
+
+## Performance Considerations
+
+### Hashing Performance
+```go
+// Monitor hashing performance
+func (s *HashingService) HashPasswordWithMetrics(password string) (string, error) {
+    start := time.Now()
+    
+    hashedPassword, err := facades.Hash().Make(password)
+    
+    duration := time.Since(start)
+    
+    // Log performance metrics
+    facades.Log().Info("Password hashing completed", map[string]any{
+        "duration_ms": duration.Milliseconds(),
+        "algorithm":   facades.Config().GetString("hashing.driver"),
+    })
+    
+    return hashedPassword, err
+}
+```
+
+### Batch Operations
+```go
+// Batch password verification
+func verifyMultiplePasswords(credentials []struct {
+    UserID   uint
+    Password string
+    Hash     string
+}) []bool {
+    results := make([]bool, len(credentials))
+    
+    for i, cred := range credentials {
+        results[i] = facades.Hash().Check(cred.Password, cred.Hash)
+    }
+    
+    return results
+}
+```
+
+## Testing Hashing
+
+### Unit Testing
+```go
+// Test hashing functionality
+func TestHashing(t *testing.T) {
+    password := "test-password"
+    
+    // Test password hashing
+    hashed, err := facades.Hash().Make(password)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, hashed)
+    
+    // Test password verification
+    assert.True(t, facades.Hash().Check(password, hashed))
+    assert.False(t, facades.Hash().Check("wrong-password", hashed))
+    
+    // Test rehash detection
+    assert.False(t, facades.Hash().NeedsRehash(hashed))
+}
+
+// Test different algorithms
+func TestHashingAlgorithms(t *testing.T) {
+    password := "test-password"
+    
+    // Test Argon2id
+    facades.Config().Add("hashing.driver", "argon2id")
+    argon2idHash, err := facades.Hash().Make(password)
+    assert.NoError(t, err)
+    assert.True(t, facades.Hash().Check(password, argon2idHash))
+    
+    // Test Bcrypt
+    facades.Config().Add("hashing.driver", "bcrypt")
+    bcryptHash, err := facades.Hash().Make(password)
+    assert.NoError(t, err)
+    assert.True(t, facades.Hash().Check(password, bcryptHash))
+}
+```
+
+### Integration Testing
+```go
+// Test password hashing in authentication flow
+func TestAuthenticationFlow(t *testing.T) {
+    // Test user registration
+    password := "secure-password"
+    hashedPassword, err := facades.Hash().Make(password)
+    assert.NoError(t, err)
+    
+    user := models.User{
+        Email:    "test@example.com",
+        Password: hashedPassword,
+    }
+    
+    // Test password verification
+    assert.True(t, facades.Hash().Check(password, user.Password))
+    
+    // Test wrong password
+    assert.False(t, facades.Hash().Check("wrong-password", user.Password))
+}
+```
+
+## Hashing Best Practices
+
+### Design Principles
+- **Security First**: Always use secure hashing algorithms
+- **Work Factor**: Use appropriate work factors for your security requirements
+- **Rehashing**: Implement automatic password rehashing
+- **Validation**: Validate password strength before hashing
+
+### Security Considerations
+- **Algorithm Choice**: Use Argon2id for new applications, Bcrypt for compatibility
+- **Work Factor**: Adjust work factors based on security requirements
+- **Timing Attacks**: Implement constant-time password verification
+- **Password History**: Track password history to prevent reuse
+
+### Performance Considerations
+- **Work Factor**: Balance security with performance
+- **Monitoring**: Monitor hashing performance
+- **Caching**: Avoid caching hashed passwords
+- **Batch Operations**: Use batch operations when possible
+
+## Development Guidelines
+
+### Hashing Organization
+- **Service Layer**: Use service layer for hashing logic
+- **Model Integration**: Integrate hashing with models when appropriate
+- **Configuration**: Configure hashing parameters appropriately
+- **Testing**: Test hashing functionality thoroughly
+
+### Monitoring and Maintenance
+- **Performance Metrics**: Monitor hashing performance
+- **Security Events**: Monitor password-related security events
+- **Algorithm Updates**: Keep hashing algorithms up to date
+- **Work Factor Tuning**: Adjust work factors based on performance
+
+## Best Practices
+
+### Hashing Design
+- **Consistent API**: Use consistent patterns for hashing
+- **Error Handling**: Handle hashing errors gracefully
+- **Security**: Implement comprehensive security measures
+- **Documentation**: Document hashing requirements and policies
+
+### Security
+- **Algorithm Security**: Use secure hashing algorithms
+- **Work Factor**: Use appropriate work factors
+- **Timing Attacks**: Prevent timing attacks
+- **Password Policies**: Implement strong password policies
+
+### Performance
+- **Work Factor Tuning**: Balance security with performance
+- **Monitoring**: Monitor hashing performance
+- **Batch Operations**: Use batch operations efficiently
+- **Resource Management**: Manage hashing resources properly
+
+### Reliability
+- **Error Handling**: Handle all hashing errors
+- **Fallback Mechanisms**: Implement fallback mechanisms for hashing failures
+- **Testing**: Test hashing thoroughly
+- **Monitoring**: Monitor hashing system health

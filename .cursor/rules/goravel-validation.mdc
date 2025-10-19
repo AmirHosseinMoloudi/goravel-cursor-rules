@@ -1,0 +1,605 @@
+---
+alwaysApply: true
+---
+
+# Goravel Validation System
+
+Based on the [official Goravel validation documentation](https://www.goravel.dev/the-basics/validation.html).
+
+## Validation Overview
+
+### Introduction
+- **Data Validation**: Goravel provides several approaches to validate incoming data
+- **Request Validation**: Most common approach using `Validate` method on HTTP requests
+- **Comprehensive Rules**: Wide variety of convenient validation rules
+- **Flexible System**: Support for form requests, manual validators, and custom rules
+
+### Key Concepts
+- **Validation Facade**: Access validation functionality through `facades.Validation()`
+- **Request Validation**: Use `ctx.Request().Validate()` for simple validation
+- **Form Requests**: Custom request classes for complex validation scenarios
+- **Custom Rules**: Create custom validation rules and filters
+
+## Validation Quickstart
+
+### Basic Request Validation
+```go
+func (r *PostController) Store(ctx http.Context) {
+    validator, err := ctx.Request().Validate(map[string]string{
+        "title": "required|max_len:255",
+        "body":  "required",
+        "code":  "required|regex:^\\d{4,6}$",
+    })
+    
+    if err != nil {
+        // Handle validation errors
+    }
+}
+```
+
+### Nested Attributes Validation
+```go
+validator, err := ctx.Request().Validate(map[string]string{
+    "title":             "required|max_len:255",
+    "author.name":       "required",
+    "author.description": "required",
+})
+```
+
+### Slice Validation
+```go
+validator, err := ctx.Request().Validate(map[string]string{
+    "tags.*": "required",
+})
+```
+
+## Form Request Validation
+
+### Creating Form Requests
+```bash
+# Create form request using Artisan
+go run . artisan make:request StorePostRequest
+go run . artisan make:request user/StorePostRequest
+```
+
+### Form Request Structure
+```go
+package requests
+
+import (
+    "mime/multipart"
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/contracts/validation"
+)
+
+type StorePostRequest struct {
+    Name  string                 `form:"name" json:"name"`
+    File  *multipart.FileHeader  `form:"file" json:"file"`
+    Files []*multipart.FileHeader `form:"files" json:"files"`
+}
+
+func (r *StorePostRequest) Authorize(ctx http.Context) error {
+    return nil
+}
+
+func (r *StorePostRequest) Rules(ctx http.Context) map[string]string {
+    return map[string]string{
+        "name":    "required|max_len:255",
+        "file":    "required|file",
+        "files":   "required|array",
+        "files.*": "required|file",
+    }
+}
+```
+
+### Using Form Requests
+```go
+func (r *PostController) Store(ctx http.Context) {
+    var storePost requests.StorePostRequest
+    errors, err := ctx.Request().ValidateRequest(&storePost)
+    
+    if err != nil {
+        // Handle validation errors
+    }
+}
+```
+
+### Form Request Methods
+
+#### Authorization
+```go
+func (r *StorePostRequest) Authorize(ctx http.Context) error {
+    var comment models.Comment
+    facades.Orm().Query().First(&comment)
+    if comment.ID == 0 {
+        return errors.New("no comment is found")
+    }
+
+    if !facades.Gate().Allows("update", map[string]any{
+        "comment": comment,
+    }) {
+        return errors.New("can't update comment")
+    }
+
+    return nil
+}
+```
+
+#### Input Filtering
+```go
+func (r *StorePostRequest) Filters(ctx http.Context) map[string]string {
+    return map[string]string{
+        "name": "trim",
+    }
+}
+```
+
+#### Custom Error Messages
+```go
+func (r *StorePostRequest) Messages() map[string]string {
+    return map[string]string{
+        "title.required": "A title is required",
+        "body.required":  "A message is required",
+    }
+}
+```
+
+#### Custom Attributes
+```go
+func (r *StorePostRequest) Attributes() map[string]string {
+    return map[string]string{
+        "email": "email address",
+    }
+}
+```
+
+#### Data Preparation
+```go
+func (r *StorePostRequest) PrepareForValidation(ctx http.Context, data validation.Data) error {
+    if name, exist := data.Get("name"); exist {
+        return data.Set("name", name.(string)+"1")
+    }
+    return nil
+}
+```
+
+## Manual Validator Creation
+
+### Creating Validators
+```go
+func (r *PostController) Store(ctx http.Context) http.Response {
+    validator, _ := facades.Validation().Make(
+        map[string]any{
+            "name": "Goravel",
+        },
+        map[string]string{
+            "title": "required|max_len:255",
+            "body":  "required",
+        })
+
+    if validator.Fails() {
+        // Handle validation failure
+    }
+
+    var user models.User
+    err := validator.Bind(&user)
+    // ...
+}
+```
+
+### Custom Error Messages
+```go
+validator, err := facades.Validation().Make(input, rules, validation.Messages(map[string]string{
+    "required": "The :attribute field is required.",
+}))
+```
+
+### Custom Attribute Values
+```go
+validator, err := facades.Validation().Make(input, rules, validation.Attributes(map[string]string{
+    "email": "email address",
+}))
+```
+
+### Data Preparation
+```go
+validator, err := facades.Validation().Make(input, rules,
+    validation.PrepareForValidation(func(ctx http.Context, data validationcontract.Data) error {
+        if name, exist := data.Get("name"); exist {
+            return data.Set("name", name)
+        }
+        return nil
+    }))
+```
+
+## Working With Validated Input
+
+### Binding Validated Data
+```go
+// Using Bind method
+validator, err := ctx.Request().Validate(rules)
+var user models.User
+err := validator.Bind(&user)
+
+// Using Validation facade
+validator, err := facades.Validation().Make(input, rules)
+var user models.User
+err := validator.Bind(&user)
+```
+
+### Form Request Binding
+```go
+var storePost requests.StorePostRequest
+errors, err := ctx.Request().ValidateRequest(&storePost)
+fmt.Println(storePost.Name) // Access validated data
+```
+
+## Working With Error Messages
+
+### Retrieving Error Messages
+```go
+// Get one error message for a field (random)
+message := validator.Errors().One("email")
+
+// Get all error messages for a field
+messages := validator.Errors().Get("email")
+
+// Get all error messages for all fields
+messages := validator.Errors().All()
+
+// Check if error messages exist for a field
+if validator.Errors().Has("email") {
+    // Handle error
+}
+```
+
+## Available Validation Rules
+
+### Basic Rules
+- **required**: Check value is required and cannot be zero value
+- **required_if**: Required if another field equals value
+- **required_unless**: Required unless another field equals value
+- **required_with**: Required if other fields are present
+- **required_with_all**: Required if all other fields are present
+- **required_without**: Required when other fields are not present
+- **required_without_all**: Required when all other fields are not present
+
+### Type Rules
+- **int**: Check value is intX uintX type with size checking
+- **uint**: Check value is uint(uintX) type, value >= 0
+- **bool**: Check value is bool string
+- **string**: Check value is string type with size checking
+- **float**: Check value is float(floatX) type
+- **slice**: Check value is slice type
+- **array**: Check value is array, slice type
+- **map**: Check value is a MAP type
+
+### String Rules
+- **in**: Check if value is in given enumeration
+- **not_in**: Check if value is not in given enumeration
+- **starts_with**: Check if input string starts with given sub-string
+- **ends_with**: Check if input string ends with given sub-string
+- **alpha**: Verify value contains only alphabetic characters
+- **alpha_num**: Check only letters, numbers are included
+- **alpha_dash**: Check letters, numbers, dashes, underscores
+- **json**: Check value is JSON string
+- **number**: Check value is number string >= 0
+- **full_url**: Check value is full URL string
+- **ip**: Check value is IP(v4 or v6) string
+- **ipv4**: Check value is IPv4 string
+- **ipv6**: Check value is IPv6 string
+- **regex**: Check if value can pass regular verification
+- **uuid**: Check value is UUID string
+- **uuid3**: Check value is UUID3 string
+- **uuid4**: Check value is UUID4 string
+- **uuid5**: Check value is UUID5 string
+
+### Numeric Rules
+- **between**: Check value is within given range
+- **max**: Check value is less than or equal to given value
+- **min**: Check value is greater than or equal to given value
+- **eq**: Check input value equals given value
+- **ne**: Check input value not equal to given value
+- **lt**: Check value is less than given value
+- **gt**: Check value is greater than given value
+
+### Length Rules
+- **len**: Check value length equals given size
+- **min_len**: Check minimum length of value
+- **max_len**: Check maximum length of value
+
+### Field Comparison Rules
+- **eq_field**: Check field value equals another field
+- **ne_field**: Check field value not equals another field
+- **gt_field**: Check field value greater than another field
+- **gte_field**: Check field value greater than or equal to another field
+- **lt_field**: Check field value less than another field
+- **lte_field**: Check field value less than or equal to another field
+
+### File Rules
+- **file**: Verify if it is an uploaded file
+- **image**: Check if it is an uploaded image file
+
+### Date Rules
+- **date**: Check field value is date string
+- **gt_date**: Check input value greater than given date
+- **lt_date**: Check input value less than given date
+- **gte_date**: Check input value greater than or equal to given date
+- **lte_date**: Check input value less than or equal to given date
+
+### Email Rules
+- **email**: Check value is email address string
+
+## Custom Validation Rules
+
+### Creating Custom Rules
+```bash
+# Create custom rule using Artisan
+go run . artisan make:rule Uppercase
+go run . artisan make:rule user/Uppercase
+```
+
+### Custom Rule Implementation
+```go
+package rules
+
+import (
+    "strings"
+    "github.com/goravel/framework/contracts/validation"
+)
+
+type Uppercase struct {
+}
+
+// Signature The name of the rule
+func (receiver *Uppercase) Signature() string {
+    return "uppercase"
+}
+
+// Passes Determine if the validation rule passes
+func (receiver *Uppercase) Passes(data validation.Data, val any, options ...any) bool {
+    return strings.ToUpper(val.(string)) == val.(string)
+}
+
+// Message Get the validation error message
+func (receiver *Uppercase) Message() string {
+    return "The :attribute must be uppercase."
+}
+```
+
+### Registering Custom Rules
+```go
+// app/providers/validation_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/contracts/validation"
+    "github.com/goravel/framework/facades"
+    "goravel/app/rules"
+)
+
+type ValidationServiceProvider struct {
+}
+
+func (receiver *ValidationServiceProvider) Register() {
+}
+
+func (receiver *ValidationServiceProvider) Boot() {
+    if err := facades.Validation().AddRules(receiver.rules()); err != nil {
+        facades.Log().Errorf("add rules error: %+v", err)
+    }
+}
+
+func (receiver *ValidationServiceProvider) rules() []validation.Rule {
+    return []validation.Rule{
+        &rules.Uppercase{},
+    }
+}
+```
+
+## Available Validation Filters
+
+### Type Conversion Filters
+- **int/toInt**: Convert value to int type
+- **uint/toUint**: Convert value to uint type
+- **int64/toInt64**: Convert value to int64 type
+- **float/toFloat**: Convert value to float type
+- **bool/toBool**: Convert string value to bool
+
+### String Filters
+- **trim/trimSpace**: Clean whitespace characters on both sides
+- **ltrim/trimLeft**: Clean whitespace characters on left side
+- **rtrim/trimRight**: Clean whitespace characters on right side
+- **lower/lowercase**: Convert string to lowercase
+- **upper/uppercase**: Convert string to uppercase
+- **lcFirst/lowerFirst**: Convert first character to lowercase
+- **ucFirst/upperFirst**: Convert first character to uppercase
+- **ucWord/upperWord**: Convert first character of each word to uppercase
+- **camel/camelCase**: Convert string to camel naming style
+- **snake/snakeCase**: Convert string to snake naming style
+
+### Security Filters
+- **escapeJs/escapeJS**: Escape JS string
+- **escapeHtml/escapeHTML**: Escape HTML string
+
+### Data Conversion Filters
+- **str2ints/strToInts**: Convert string to int slice
+- **str2time/strToTime**: Convert date string to time.Time
+- **str2arr/str2array/strToArray**: Convert string to string slice
+
+## Custom Filters
+
+### Creating Custom Filters
+```bash
+# Create custom filter using Artisan
+go run . artisan make:filter ToInt
+go run . artisan make:filter user/ToInt
+```
+
+### Custom Filter Implementation
+```go
+package filters
+
+import (
+    "github.com/spf13/cast"
+    "github.com/goravel/framework/contracts/validation"
+)
+
+type ToInt struct {
+}
+
+// Signature The signature of the filter
+func (receiver *ToInt) Signature() string {
+    return "ToInt"
+}
+
+// Handle defines the filter function to apply
+func (receiver *ToInt) Handle() any {
+    return func(val any) int {
+        return cast.ToInt(val)
+    }
+}
+```
+
+### Registering Custom Filters
+```go
+// app/providers/validation_service_provider.go
+func (receiver *ValidationServiceProvider) Boot() {
+    if err := facades.Validation().AddFilters(receiver.filters()); err != nil {
+        facades.Log().Errorf("add filters error: %+v", err)
+    }
+}
+
+func (receiver *ValidationServiceProvider) filters() []validation.Filter {
+    return []validation.Filter{
+        &filters.ToInt{},
+    }
+}
+```
+
+## Validation Best Practices
+
+### Design Principles
+- **Early Validation**: Validate data as early as possible in the request lifecycle
+- **Comprehensive Rules**: Use appropriate validation rules for data types
+- **Custom Messages**: Provide clear, user-friendly error messages
+- **Security**: Validate all user inputs to prevent security vulnerabilities
+
+### Performance Considerations
+- **Efficient Rules**: Use efficient validation rules
+- **Batch Validation**: Validate multiple fields in single operation
+- **Custom Rules**: Create custom rules for complex validation logic
+- **Caching**: Cache validation results when appropriate
+
+### Security Considerations
+- **Input Sanitization**: Use filters to sanitize input data
+- **XSS Prevention**: Escape HTML and JS content
+- **SQL Injection**: Validate data before database operations
+- **File Validation**: Validate file types and sizes for uploads
+
+## Common Validation Patterns
+
+### User Registration
+```go
+func (c *AuthController) Register(ctx http.Context) http.Response {
+    validator, err := ctx.Request().Validate(map[string]string{
+        "name":     "required|max_len:255",
+        "email":    "required|email|unique:users,email",
+        "password": "required|min_len:8",
+        "confirm":  "required|eq_field:password",
+    })
+    
+    if err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "errors": validator.Errors().All(),
+        })
+    }
+    
+    // Continue with registration
+}
+```
+
+### File Upload Validation
+```go
+func (c *FileController) Upload(ctx http.Context) http.Response {
+    validator, err := ctx.Request().Validate(map[string]string{
+        "file": "required|file|image|max:2048", // 2MB max
+    })
+    
+    if err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid file",
+        })
+    }
+    
+    // Process file upload
+}
+```
+
+### API Data Validation
+```go
+func (c *ApiController) CreateUser(ctx http.Context) http.Response {
+    var request requests.CreateUserRequest
+    errors, err := ctx.Request().ValidateRequest(&request)
+    
+    if err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "message": "Validation failed",
+            "errors":  errors,
+        })
+    }
+    
+    // Create user with validated data
+    user := c.userService.Create(request)
+    
+    return ctx.Response().Created().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Development Guidelines
+
+### Validation Organization
+- **Form Requests**: Use form requests for complex validation scenarios
+- **Manual Validation**: Use manual validation for simple cases
+- **Custom Rules**: Create custom rules for reusable validation logic
+- **Error Handling**: Implement consistent error handling patterns
+
+### Testing Validation
+- **Unit Tests**: Test validation rules individually
+- **Integration Tests**: Test complete validation workflows
+- **Edge Cases**: Test validation with edge cases and boundary values
+- **Error Messages**: Test error message generation
+
+### Performance Optimization
+- **Rule Efficiency**: Use efficient validation rules
+- **Batch Operations**: Validate multiple fields together
+- **Custom Rules**: Optimize custom validation rules
+- **Caching**: Cache validation results when appropriate
+
+## Best Practices
+
+### Validation Design
+- **Comprehensive Coverage**: Validate all user inputs
+- **Clear Messages**: Provide clear, actionable error messages
+- **Consistent Rules**: Use consistent validation rules across the application
+- **Security First**: Prioritize security in validation design
+
+### Error Handling
+- **User-Friendly Messages**: Provide clear error messages to users
+- **Developer Information**: Include detailed error information for developers
+- **Logging**: Log validation errors for debugging
+- **Graceful Degradation**: Handle validation failures gracefully
+
+### Performance
+- **Efficient Rules**: Use efficient validation rules
+- **Batch Validation**: Validate multiple fields together
+- **Custom Rules**: Optimize custom validation rules
+- **Caching**: Cache validation results when appropriate
+
+### Security
+- **Input Sanitization**: Sanitize all user inputs
+- **XSS Prevention**: Escape HTML and JS content
+- **File Security**: Validate file uploads thoroughly
+- **Data Validation**: Validate data before processing

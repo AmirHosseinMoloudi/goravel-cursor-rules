@@ -1,0 +1,759 @@
+---
+alwaysApply: true
+---
+
+# Goravel Query Builder
+
+Based on the [official Goravel query builder documentation](https://www.goravel.dev/database/queries.html).
+
+## Query Builder Overview
+
+### Introduction
+- **Convenient Interface**: The database query builder provides a convenient interface to create and execute database queries
+- **Universal Support**: Works with all supported database systems (MySQL, PostgreSQL, SQL Server, SQLite)
+- **SQL Injection Protection**: Uses parameter binding to protect your application from SQL injection
+- **No Manual Escaping**: You don't need to clean or escape strings passed to the query builder
+
+### Key Concepts
+- **DB Facade**: Access query builder functionality through `facades.DB()`
+- **Chainable Methods**: Query builder methods are chainable for fluent query construction
+- **Parameter Binding**: Automatic parameter binding for security
+- **Database Agnostic**: Works across different database systems
+- **Struct Binding**: Use `db` tags for struct field binding
+
+## Running Queries
+
+### Struct Binding Requirements
+```go
+// Basic struct with db tags
+type User struct {
+    ID   string `db:"id"`
+    Name string `db:"name"`
+}
+
+// ORM model with base model
+type User struct {
+    orm.BaseModel
+    orm.NullableSoftDeletes
+    Name string `db:"name"`
+}
+```
+
+### Retrieving All Rows
+```go
+// Get all users
+var users []User
+err := facades.DB().Table("users").Get(&users)
+
+// Get all products with conditions
+var products []Product
+err := facades.DB().Table("products").Where("active", true).Get(&products)
+```
+
+### Retrieving Single Row or Column
+
+#### First Method
+```go
+// Get first user
+var user User
+err := facades.DB().Table("users").Where("id", 1).First(&user)
+
+// Get first user by email
+var user User
+err := facades.DB().Table("users").Where("email", "john@example.com").First(&user)
+```
+
+#### Value Method
+```go
+// Get single column value
+var name string
+err := facades.DB().Table("users").Where("id", 1).Value("name", &name)
+
+// Get single column with conditions
+var email string
+err := facades.DB().Table("users").Where("active", true).Value("email", &email)
+```
+
+#### Find Method
+```go
+// Find by ID
+var user User
+err := facades.DB().Table("users").Find(&user, 1)
+
+// Find multiple records by IDs
+var users []User
+err := facades.DB().Table("users").Find(&users, []int{1, 2, 3})
+
+// Find with custom primary key
+var user User
+err := facades.DB().Table("users").Find(&user, "uuid", "123e4567-e89b-12d3-a456-426614174000")
+```
+
+#### FindOrFail / FirstOrFail Methods
+```go
+// Find or fail (throws sql.ErrNoRows if not found)
+var user User
+err := facades.DB().Table("users").FindOrFail(&user, 1)
+
+// First or fail
+var user User
+err := facades.DB().Table("users").Where("email", "john@example.com").FirstOrFail(&user)
+```
+
+#### FindOr / FirstOr Methods
+```go
+// Find or execute closure
+var user *User
+user, err = facades.DB().Table("users").Where("name", "John").FirstOr(&user, func() error {
+    return errors.New("no rows")
+})
+
+// First or execute closure
+var user *User
+user, err = facades.DB().Table("users").Where("email", "john@example.com").FirstOr(&user, func() error {
+    return errors.New("user not found")
+})
+```
+
+### Retrieving Single Column Values
+```go
+// Get all emails
+var emails []string
+err := facades.DB().Table("users").Pluck("email", &emails)
+
+// Get all names with conditions
+var names []string
+err := facades.DB().Table("users").Where("active", true).Pluck("name", &names)
+```
+
+### Traversing Results
+```go
+// Process each row individually
+var products []Product
+err := facades.DB().Table("products").Each(func(rows []db.Row) error {
+    for _, row := range rows {
+        var product Product
+        err := row.Scan(&product)
+        if err != nil {
+            return err
+        }
+        products = append(products, product)
+    }
+    return nil
+})
+```
+
+### Chunking Results
+```go
+// Process large datasets in chunks
+var products []Product
+err := facades.DB().Table("products").Chunk(100, func(rows []db.Row) error {
+    for _, row := range rows {
+        var product Product
+        err := row.Scan(&product)
+        if err != nil {
+            return err
+        }
+        products = append(products, product)
+    }
+    return nil
+})
+```
+
+### Cursor Processing
+```go
+// Process large datasets with cursor
+rows, err := facades.DB().Table("products").Cursor()
+
+var products []Product
+for row := range rows {
+    var product Product
+    err = row.Scan(&product)
+    if err != nil {
+        break
+    }
+    products = append(products, product)
+}
+```
+
+### Aggregates
+```go
+// Count records
+count, err := facades.DB().Table("users").Count()
+
+// Sum values
+sum, err := facades.DB().Table("users").Sum("age")
+
+// Average values
+avg, err := facades.DB().Table("users").Avg("age")
+
+// Maximum value
+max, err := facades.DB().Table("users").Max("age")
+
+// Minimum value
+min, err := facades.DB().Table("users").Min("age")
+```
+
+### Checking Record Existence
+```go
+// Check if records exist
+exists, err := facades.DB().Table("users").Where("votes > ?", 100).Exists()
+
+// Check if records don't exist
+doesntExist, err := facades.DB().Table("users").Where("votes > ?", 100).DoesntExist()
+```
+
+### Pagination
+```go
+// Paginate results
+var (
+    users []User
+    total int64
+)
+
+err := facades.DB().Table("users").Where("name", "John").Paginate(1, 10, &users, &total)
+```
+
+## Select Operations
+
+### Basic Select
+```go
+// Select specific fields
+var users []User
+err := facades.DB().Table("users").Select("name", "email").Get(&users)
+
+// Select with aliases
+var users []User
+err := facades.DB().Table("users").Select("name", "email as user_email").Get(&users)
+```
+
+### Distinct Select
+```go
+// Get distinct values
+var users []User
+err := facades.DB().Table("users").Distinct().Select("name").Get(&users)
+
+// Get distinct with multiple fields
+var users []User
+err := facades.DB().Table("users").Distinct("name", "email").Get(&users)
+```
+
+### Raw Expressions
+```go
+import "github.com/goravel/framework/database/db"
+
+// Use raw expressions in select
+var users []User
+err := facades.DB().Table("users").Select("name", db.Raw("(SELECT COUNT(*) FROM posts WHERE users.id = posts.user_id) as post_count")).Get(&users)
+
+// Use raw expressions in updates
+err := facades.DB().Table("users").Where("id", 1).Update("age", db.Raw("age - ?", 1))
+```
+
+## Raw Methods
+
+### WhereRaw / OrWhereRaw
+```go
+// Raw where clauses
+var users []User
+err := facades.DB().WhereRaw("age = ? or age = ?", []any{25, 30}).Get(&users)
+
+// Or where raw
+err := facades.DB().OrWhereRaw("age = ? or age = ?", []any{25, 30}).Get(&users)
+```
+
+### OrderByRaw
+```go
+// Raw order by clauses
+var users []User
+err := facades.DB().OrderByRaw("age DESC, id ASC").Get(&users)
+
+// Complex ordering
+err := facades.DB().OrderByRaw("CASE WHEN status = 'active' THEN 1 ELSE 2 END").Get(&users)
+```
+
+## Joins
+
+### Inner Join
+```go
+// Basic inner join
+var users []User
+err := facades.DB().Table("users").Join("posts as p ON users.id = p.user_id AND p.id = ?", 1).Where("age", 25).Get(&users)
+
+// Join with multiple conditions
+var users []User
+err := facades.DB().Table("users").Join("posts as p ON users.id = p.user_id AND p.published = ?", true).Get(&users)
+```
+
+### Left Join / Right Join
+```go
+// Left join
+var users []User
+err := facades.DB().Table("users").LeftJoin("posts as p ON users.id = p.user_id AND p.id = ?", 1).Where("age", 25).Get(&users)
+
+// Right join
+var users []User
+err := facades.DB().Table("users").RightJoin("posts as p ON users.id = p.user_id AND p.id = ?", 1).Where("age", 25).Get(&users)
+```
+
+### Cross Join
+```go
+// Cross join
+var users []User
+err := facades.DB().Table("users").CrossJoin("posts as p ON users.id = p.user_id AND p.id = ?", 1).Where("age", 25).Get(&users)
+```
+
+## Basic Where Clauses
+
+### Where / OrWhere
+```go
+import "github.com/goravel/framework/contracts/database/db"
+
+// Basic where
+var users []User
+err := facades.DB().Where("votes", 100).Get(&users)
+
+// Where with operators
+err := facades.DB().Where("votes >= ?", 100).Get(&users)
+
+// Where with LIKE
+err := facades.DB().Where("votes LIKE ?", "%goravel%").Get(&users)
+
+// Where with IN
+err := facades.DB().Where("votes", []int{1, 2, 3}).Get(&users)
+
+// Complex where with closure
+err := facades.DB().Where(func(query db.Query) db.Query {
+    return query.Where("age", []int{25, 30}).Where("name", "Tom")
+}).OrWhere("name", "John").Get(&users)
+```
+
+### WhereNot / OrWhereNot
+```go
+// Where not
+var users []User
+err := facades.DB().WhereNot("votes", 100).Get(&users)
+
+// Where not with operators
+err := facades.DB().WhereNot("votes >= ?", 100).Get(&users)
+
+// Where not with LIKE
+err := facades.DB().WhereNot("votes LIKE ?", "%goravel%").Get(&users)
+
+// Where not with IN
+err := facades.DB().WhereNot("votes", []int{1, 2, 3}).Get(&users)
+
+// Complex where not with closure
+err := facades.DB().WhereNot(func(query db.Query) db.Query {
+    return query.Where("age", []int{25, 30}).Where("name", "Tom")
+}).OrWhereNot("name", "John").Get(&users)
+```
+
+### WhereExists / WhereNotExists
+```go
+// Where exists
+var users []User
+err := facades.DB().Table("users").Where("name", "John").WhereExists(func() db.Query {
+    return facades.DB().Table("posts").WhereColumn("posts.user_id", "users.id")
+}).Get(&users)
+
+// Where not exists
+err := facades.DB().Table("users").Where("name", "John").WhereNotExists(func() db.Query {
+    return facades.DB().Table("posts").WhereColumn("posts.user_id", "users.id")
+}).Get(&users)
+```
+
+### Other Where Clauses
+
+#### WhereBetween / OrWhereBetween
+```go
+// Where between
+facades.DB().Table("users").WhereBetween("votes", 1, 100)
+
+// Or where between
+facades.DB().Table("users").OrWhereBetween("votes", 1, 100)
+```
+
+#### WhereNotBetween / OrWhereNotBetween
+```go
+// Where not between
+facades.DB().Table("users").WhereNotBetween("votes", 1, 100)
+
+// Or where not between
+facades.DB().Table("users").OrWhereNotBetween("votes", 1, 100)
+```
+
+#### WhereIn / WhereNotIn / OrWhereIn / OrWhereNotIn
+```go
+// Where in
+facades.DB().Table("users").WhereIn("id", []any{1, 2, 3})
+
+// Where not in
+facades.DB().Table("users").WhereNotIn("id", []any{1, 2, 3})
+
+// Or where in
+facades.DB().Table("users").OrWhereIn("id", []any{1, 2, 3})
+
+// Or where not in
+facades.DB().Table("users").OrWhereNotIn("id", []any{1, 2, 3})
+```
+
+#### WhereNull / WhereNotNull / OrWhereNull / OrWhereNotNull
+```go
+// Where null
+facades.DB().Table("users").WhereNull("updated_at")
+
+// Where not null
+facades.DB().Table("users").WhereNotNull("updated_at")
+
+// Or where null
+facades.DB().Table("users").OrWhereNull("updated_at")
+
+// Or where not null
+facades.DB().Table("users").OrWhereNotNull("updated_at")
+```
+
+#### WhereLike / WhereNotLike / OrWhereLike / OrWhereNotLike
+```go
+// Where like
+facades.DB().Table("users").WhereLike("name", "%goravel%")
+
+// Where not like
+facades.DB().Table("users").WhereNotLike("name", "%goravel%")
+
+// Or where like
+facades.DB().Table("users").OrWhereLike("name", "%goravel%")
+
+// Or where not like
+facades.DB().Table("users").OrWhereNotLike("name", "%goravel%")
+```
+
+#### WhereColumn / OrWhereColumn
+```go
+// Where column
+facades.DB().Table("users").WhereColumn("first_name", "last_name")
+
+// Or where column
+facades.DB().Table("users").OrWhereColumn("first_name", "last_name")
+```
+
+### Logical Grouping
+```go
+// Group where clauses with parentheses
+facades.DB().Table("users").Where("age", 25).Where(func(query db.Query) db.Query {
+    return query.Where("votes", 100).OrWhere("votes", 200)
+})
+```
+
+## Ordering, Grouping, Limit & Offset
+
+### Ordering
+
+#### OrderBy / OrderByDesc
+```go
+// Order by ascending
+facades.DB().OrderBy("name")
+
+// Order by descending
+facades.DB().OrderByDesc("name")
+
+// Multiple ordering
+facades.DB().OrderBy("name").OrderByDesc("created_at")
+```
+
+#### Latest
+```go
+// Latest by created_at
+facades.DB().Table("users").Latest().First(&user)
+
+// Latest by specific column
+facades.DB().Table("users").Latest("updated_at").First(&user)
+```
+
+#### InRandomOrder
+```go
+// Random ordering
+facades.DB().Table("users").InRandomOrder().First(&user)
+```
+
+### Grouping
+```go
+// Group by with having
+err := facades.DB().Table("users").Where("age", 25).GroupBy("name").Having("name = ?", "John").OrderBy("name").Get(&users)
+
+// Multiple group by
+err := facades.DB().Table("users").GroupBy("name", "email").Get(&users)
+```
+
+### Limiting and Offset
+```go
+// Limit results
+err := facades.DB().Table("users").Limit(10).Get(&users)
+
+// Offset results
+err := facades.DB().Table("users").Offset(10).Get(&users)
+
+// Limit and offset
+err := facades.DB().Table("users").Offset(10).Limit(5).Get(&users)
+```
+
+## Conditional Clauses
+
+### When Method
+```go
+import "github.com/goravel/framework/contracts/database/db"
+
+// Conditional where clause
+facades.DB().Table("users").When(1 == 1, func(query db.Query) db.Query {
+    return query.Where("age", 25)
+}).First(&user)
+
+// Conditional with else clause
+facades.DB().Table("users").When(1 != 1, func(query db.Query) db.Query {
+    return query.OrderBy("name")
+}, func(query db.Query) db.Query {
+    return query.OrderBy("id")
+}).First(&user)
+```
+
+## Insert Operations
+
+### Basic Insert
+```go
+// Insert by struct
+result, err := facades.DB().Table("products").Insert(Product{
+    Name: "goravel",
+})
+
+// Insert by slice struct
+result, err := facades.DB().Table("products").Insert([]Product{
+    {
+        Name: "goravel",
+    },
+    {
+        Name: "go",
+    },
+})
+
+// Insert by map
+result, err := facades.DB().Table("products").Insert(map[string]any{
+    "name":       "goravel",
+    "created_at": time.Now(),
+    "updated_at": time.Now(),
+})
+
+// Insert by slice map
+result, err := facades.DB().Table("products").Insert([]map[string]any{
+    {
+        "name":       "goravel",
+        "created_at": time.Now(),
+        "updated_at": time.Now(),
+    },
+    {
+        "name":       "go",
+        "created_at": time.Now(),
+        "updated_at": time.Now(),
+    },
+})
+```
+
+### Auto Increment ID
+```go
+// Get auto increment ID (MySQL and SQLite only)
+id, err := facades.DB().Table("products").InsertGetID(Product{
+    Name: "goravel",
+})
+```
+
+## Update Operations
+
+### Basic Update
+```go
+// Update by field name
+result, err := facades.DB().Table("products").Where("id", 1).Update("phone", "1234567890")
+
+// Update by struct
+result, err := facades.DB().Table("products").Where("id", 1).Update(Product{
+    Name: "goravel",
+})
+
+// Update by map
+result, err := facades.DB().Table("products").Where("id", 1).Update(map[string]any{
+    "name":       "goravel",
+    "created_at": time.Now(),
+    "updated_at": time.Now(),
+})
+```
+
+### Update JSON Fields
+```go
+// Update JSON field
+facades.DB().Table("users").Where("id", 1).Update("options->enabled", true)
+
+// Update JSON array element
+facades.DB().Table("users").Where("id", 1).Update("options->languages[0]", "en")
+
+// Update JSON array
+facades.DB().Table("users").Where("id", 1).Update("options->languages", []string{"en", "de"})
+
+// Update multiple JSON fields
+facades.DB().Table("users").Where("id", 1).Update(map[string]any{
+    "preferences->dining->meal": "salad",
+    "options->languages[0]":     "en",
+    "options->enabled":          true,
+})
+```
+
+### Update or Insert
+```go
+// Update or insert with struct
+result, err := facades.DB().Table("users").Where("id", 1).UpdateOrInsert(TestUser{
+    Email: "john@example.com",
+}, TestUser{
+    Phone: "1234567890",
+})
+
+// Update or insert with map
+result, err := facades.DB().Table("users").Where("id", 1).UpdateOrInsert(map[string]any{
+    "email": "john@example.com",
+}, map[string]any{
+    "phone": "1234567890",
+})
+```
+
+### Increment and Decrement
+```go
+// Increment by 1
+err := facades.DB().Table("users").Where("id", 1).Increment("votes")
+
+// Increment by specific amount
+err := facades.DB().Table("users").Where("id", 1).Increment("votes", 2)
+
+// Decrement by 1
+err := facades.DB().Table("users").Where("id", 1).Decrement("votes")
+
+// Decrement by specific amount
+err := facades.DB().Table("users").Where("id", 1).Decrement("votes", 2)
+```
+
+## Delete Operations
+
+### Basic Delete
+```go
+// Delete single record
+result, err := facades.DB().Table("users").Where("id", 1).Delete()
+
+// Delete multiple records
+result, err := facades.DB().Table("users").Where("active", false).Delete()
+
+// Delete with conditions
+result, err := facades.DB().Table("users").Where("created_at < ?", "2022-01-01").Delete()
+```
+
+## Pessimistic Locking
+
+### Shared Lock
+```go
+// Shared lock prevents modification until transaction commit
+facades.DB().Table("users").Where("votes > ?", 100).SharedLock().Get(&users)
+```
+
+### Lock for Update
+```go
+// Update lock prevents modification or selection by other shared locks
+facades.DB().Table("users").Where("votes > ?", 100).LockForUpdate().Get(&users)
+```
+
+## Debugging
+
+### SQL Query Debugging
+```go
+// Get SQL with placeholders
+sql := facades.DB().Table("users").Where("id", 1).ToSql().Get(models.User{})
+
+// Get SQL with bound values
+rawSql := facades.DB().Table("users").Where("id", 1).ToRawSql().Get(models.User{})
+
+// Debug complex queries
+var users []User
+query := facades.DB().Table("users").Where("active", true).OrderBy("name")
+sql := query.ToSql().Get(users)
+facades.Log().Info("Query SQL", map[string]any{"sql": sql})
+```
+
+## Advanced Query Patterns
+
+### Complex Joins
+```go
+// Multiple joins
+var results []struct {
+    UserID    uint   `db:"user_id"`
+    UserName  string `db:"user_name"`
+    PostID    uint   `db:"post_id"`
+    PostTitle string `db:"post_title"`
+    CommentCount int `db:"comment_count"`
+}
+
+err := facades.DB().Table("users").
+    Join("posts ON users.id = posts.user_id").
+    LeftJoin("comments ON posts.id = comments.post_id").
+    Select("users.id as user_id", "users.name as user_name", "posts.id as post_id", "posts.title as post_title", "COUNT(comments.id) as comment_count").
+    GroupBy("users.id", "posts.id").
+    Get(&results)
+```
+
+### Subqueries
+```go
+// Subquery in where clause
+var users []User
+err := facades.DB().Table("users").Where("id", func(query db.Query) db.Query {
+    return facades.DB().Table("posts").Select("user_id").Where("published", true)
+}).Get(&users)
+
+// Subquery in select
+var users []User
+err := facades.DB().Table("users").Select("name", db.Raw("(SELECT COUNT(*) FROM posts WHERE users.id = posts.user_id) as post_count")).Get(&users)
+```
+
+### Union Queries
+```go
+// Union queries
+var users []User
+err := facades.DB().Table("users").Where("active", true).
+    Union(facades.DB().Table("users").Where("verified", true)).
+    Get(&users)
+```
+
+## Query Builder Best Practices
+
+### Design Principles
+- **Use Parameter Binding**: Always use parameter binding for security
+- **Chain Methods**: Use method chaining for readable queries
+- **Optimize Queries**: Use appropriate indexes and query optimization
+- **Handle Errors**: Always handle query errors properly
+
+### Performance Considerations
+- **Use Indexes**: Ensure proper database indexes for query performance
+- **Limit Results**: Use LIMIT and OFFSET for large datasets
+- **Avoid N+1 Queries**: Use joins or eager loading to avoid N+1 problems
+- **Use Chunking**: Use chunking for large dataset processing
+
+### Security Considerations
+- **Parameter Binding**: Always use parameter binding to prevent SQL injection
+- **Input Validation**: Validate all input data before using in queries
+- **Access Control**: Implement proper access control for database operations
+- **Audit Logging**: Log database operations for security auditing
+
+## Development Guidelines
+
+### Query Organization
+- **Readable Queries**: Write readable and maintainable queries
+- **Consistent Patterns**: Use consistent query patterns throughout the application
+- **Error Handling**: Implement proper error handling for all database operations
+- **Testing**: Test query builder operations thoroughly
+
+### Monitoring and Maintenance
+- **Query Performance**: Monitor query performance and optimize as needed
+- **Database Health**: Monitor database health and connection usage
+- **Error Tracking**: Track and monitor database errors
+- **Query Logging**: Log queries for debugging and optimization

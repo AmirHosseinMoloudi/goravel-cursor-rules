@@ -1,0 +1,498 @@
+---
+alwaysApply: true
+---
+
+# Goravel Mail System
+
+Based on the [official Goravel mail documentation](https://www.goravel.dev/digging-deeper/mail.html).
+
+## Mail Overview
+
+### Introduction
+- **Email Sending**: Goravel can use `facades.Mail()` to easily send mail locally
+- **Queue Support**: Support for sending emails through queues for better performance
+- **Mailable Structs**: Use Mailable structs to organize email parameters
+- **Flexible Configuration**: Configurable mail settings and multiple sending options
+
+### Key Concepts
+- **Mail Facade**: Access mail functionality through `facades.Mail()`
+- **Queue Integration**: Send emails through queues for better performance
+- **Mailable Classes**: Organize email parameters in structured classes
+- **Configuration**: Mail settings in [config/mail.go](mdc:config/mail.go)
+
+## Configuration
+
+### Mail Configuration
+```go
+// config/mail.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("mail", map[string]interface{}{
+        // Mail Configuration
+        //
+        // Configure the default mail driver
+        "default": config.Env("MAIL_MAILER", "smtp"),
+
+        // Configure mail drivers
+        "mailers": map[string]any{
+            "smtp": map[string]any{
+                "driver":   "smtp",
+                "host":     config.Env("MAIL_HOST", "smtp.mailgun.org"),
+                "port":     config.Env("MAIL_PORT", 587),
+                "username": config.Env("MAIL_USERNAME"),
+                "password": config.Env("MAIL_PASSWORD"),
+                "encryption": config.Env("MAIL_ENCRYPTION", "tls"),
+            },
+        },
+
+        // Configure global senders
+        "from": map[string]any{
+            "address": config.Env("MAIL_FROM_ADDRESS", "hello@example.com"),
+            "name":    config.Env("MAIL_FROM_NAME", "Example"),
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Mail configuration
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailgun.org
+MAIL_PORT=587
+MAIL_USERNAME=your-username
+MAIL_PASSWORD=your-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=hello@example.com
+MAIL_FROM_NAME=Example
+```
+
+## Send Mail
+
+### Basic Mail Sending
+```go
+import "github.com/goravel/framework/mail"
+
+// Send email with basic configuration
+err := facades.Mail().To([]string{"example@example.com"}).
+    Cc([]string{"example@example.com"}).
+    Bcc([]string{"example@example.com"}).
+    Attach([]string{"file.png"}).
+    Content(mail.Html("<h1>Hello Goravel</h1>")).
+    Headers(map[string]string{"X-Mailer": "Goravel"}).
+    Subject("Subject").
+    Send()
+```
+
+### Mail Components
+- **Recipients**: `To()`, `Cc()`, `Bcc()` methods for recipients
+- **Attachments**: `Attach()` method for file attachments
+- **Content**: `Content()` method for email body (HTML/text)
+- **Headers**: `Headers()` method for custom headers
+- **Subject**: `Subject()` method for email subject
+
+### HTML Content
+```go
+// Send HTML email
+err := facades.Mail().To([]string{"user@example.com"}).
+    Content(mail.Html("<h1>Welcome to Goravel</h1><p>Thank you for joining us!</p>")).
+    Subject("Welcome").
+    Send()
+```
+
+### Text Content
+```go
+// Send text email
+err := facades.Mail().To([]string{"user@example.com"}).
+    Content(mail.Text("Welcome to Goravel! Thank you for joining us.")).
+    Subject("Welcome").
+    Send()
+```
+
+### Email with Attachments
+```go
+// Send email with attachments
+err := facades.Mail().To([]string{"user@example.com"}).
+    Attach([]string{"document.pdf", "image.jpg"}).
+    Content(mail.Html("<h1>Please find attached documents</h1>")).
+    Subject("Documents").
+    Send()
+```
+
+## Send Mail By Queue
+
+### Basic Queue Sending
+```go
+import "github.com/goravel/framework/mail"
+
+// Send email through queue
+err := facades.Mail().To([]string{"example@example.com"}).
+    Cc([]string{"example@example.com"}).
+    Bcc([]string{"example@example.com"}).
+    Attach([]string{"file.png"}).
+    Content(mail.Html("<h1>Hello Goravel</h1>")).
+    Headers(map[string]string{"X-Mailer": "Goravel"}).
+    Subject("Subject").
+    Queue()
+```
+
+### Custom Queue Configuration
+```go
+// Send email with custom queue settings
+err := facades.Mail().To([]string{"example@example.com"}).
+    Cc([]string{"example@example.com"}).
+    Bcc([]string{"example@example.com"}).
+    Attach([]string{"file.png"}).
+    Content(mail.Html("<h1>Hello Goravel</h1>")).
+    Subject("Subject").
+    Headers(map[string]string{"X-Mailer": "Goravel"}).
+    Queue(mail.Queue().Connection("redis").Queue("mail"))
+```
+
+### Queue Benefits
+- **Performance**: Non-blocking email sending
+- **Reliability**: Retry failed emails
+- **Scalability**: Handle high email volumes
+- **Monitoring**: Track email delivery status
+
+## Setting Sender
+
+### Global Sender Configuration
+```go
+// Framework uses MAIL_FROM_ADDRESS and MAIL_FROM_NAME as global senders
+// Configured in config/mail.go
+"from": map[string]any{
+    "address": config.Env("MAIL_FROM_ADDRESS", "hello@example.com"),
+    "name":    config.Env("MAIL_FROM_NAME", "Example"),
+}
+```
+
+### Custom Sender
+```go
+// Custom sender (must be consistent with configured SMTP)
+err := facades.Mail().To([]string{"example@example.com"}).
+    From(mail.Address("custom@example.com", "Custom Sender")).
+    Cc([]string{"example@example.com"}).
+    Bcc([]string{"example@example.com"}).
+    Attach([]string{"file.png"}).
+    Content(mail.Html("<h1>Hello Goravel</h1>")).
+    Headers(map[string]string{"X-Mailer": "Goravel"}).
+    Subject("Subject").
+    Queue(mail.Queue().Connection("redis").Queue("mail"))
+```
+
+### Sender Validation
+- **SMTP Consistency**: Mail address must be consistent with configured SMTP
+- **Authentication**: Sender must be authenticated with SMTP server
+- **Domain Verification**: Ensure sender domain is properly configured
+
+## Using Mailable
+
+### Creating Mailable Classes
+```bash
+# Create Mailable using Artisan command
+go run . artisan make:mail OrderShipped
+```
+
+### Mailable Structure
+```go
+// app/mails/order_shipped.go
+package mails
+
+import (
+    "github.com/goravel/framework/contracts/mail"
+)
+
+type OrderShipped struct {
+}
+
+func NewOrderShipped() *OrderShipped {
+    return &OrderShipped{}
+}
+
+// Headers method for custom headers
+func (m *OrderShipped) Headers() map[string]string {
+    return map[string]string{
+        "X-Mailer": "goravel",
+    }
+}
+
+// Attachments method for file attachments
+func (m *OrderShipped) Attachments() []string {
+    return []string{"../logo.png"}
+}
+
+// Content method for email body
+func (m *OrderShipped) Content() *mail.Content {
+    return &mail.Content{
+        Html: "<h1>Hello Goravel</h1>",
+    }
+}
+
+// Envelope method for email envelope
+func (m *OrderShipped) Envelope() *mail.Envelope {
+    return &mail.Envelope{
+        Bcc:   []string{"bcc@goravel.dev"},
+        Cc:    []string{"cc@goravel.dev"},
+        From:  mail.From{Address: "from@goravel.dev", Name: "from"},
+        Subject: "Goravel",
+        To:    []string{"to@goravel.dev"},
+    }
+}
+
+// Queue method for queue configuration
+func (m *OrderShipped) Queue() *mail.Queue {
+    return &mail.Queue{
+        Connection: "redis",
+        Queue:      "mail",
+    }
+}
+```
+
+### Using Mailable Classes
+```go
+// Send Mailable directly
+err := facades.Mail().Send(mails.NewOrderShipped())
+
+// Queue Mailable
+err := facades.Mail().Queue(mails.NewOrderShipped())
+```
+
+### Mailable Methods
+- **Headers()**: Custom email headers
+- **Attachments()**: File attachments
+- **Content()**: Email body content
+- **Envelope()**: Email envelope (recipients, sender, subject)
+- **Queue()**: Queue configuration
+
+## Advanced Mail Features
+
+### Dynamic Content
+```go
+// Mailable with dynamic content
+type WelcomeEmail struct {
+    UserName string
+    UserEmail string
+}
+
+func NewWelcomeEmail(userName, userEmail string) *WelcomeEmail {
+    return &WelcomeEmail{
+        UserName:  userName,
+        UserEmail: userEmail,
+    }
+}
+
+func (m *WelcomeEmail) Content() *mail.Content {
+    html := fmt.Sprintf("<h1>Welcome %s!</h1><p>Your account has been created.</p>", m.UserName)
+    return &mail.Content{Html: html}
+}
+
+func (m *WelcomeEmail) Envelope() *mail.Envelope {
+    return &mail.Envelope{
+        To:      []string{m.UserEmail},
+        Subject: "Welcome to Goravel",
+    }
+}
+```
+
+### Template Integration
+```go
+// Mailable with template integration
+func (m *OrderShipped) Content() *mail.Content {
+    // Use view template for email content
+    html := facades.View().Make("emails/order-shipped.tmpl", map[string]any{
+        "order": m.Order,
+        "user":  m.User,
+    })
+    
+    return &mail.Content{Html: html}
+}
+```
+
+### Conditional Attachments
+```go
+// Mailable with conditional attachments
+func (m *OrderShipped) Attachments() []string {
+    attachments := []string{}
+    
+    if m.Order.HasInvoice() {
+        attachments = append(attachments, m.Order.InvoicePath())
+    }
+    
+    if m.Order.HasReceipt() {
+        attachments = append(attachments, m.Order.ReceiptPath())
+    }
+    
+    return attachments
+}
+```
+
+## Mail Best Practices
+
+### Design Principles
+- **Template Organization**: Organize email templates in [resources/views/emails/](mdc:resources/views/emails/)
+- **Mailable Classes**: Use Mailable classes for complex emails
+- **Queue Usage**: Use queues for non-critical emails
+- **Error Handling**: Implement proper error handling for email failures
+
+### Performance Considerations
+- **Queue Processing**: Use queues for high-volume email sending
+- **Template Caching**: Cache email templates for better performance
+- **Attachment Optimization**: Optimize attachment sizes
+- **Batch Processing**: Send emails in batches when possible
+
+### Security Considerations
+- **Input Validation**: Validate all email inputs
+- **Attachment Security**: Scan attachments for malware
+- **Rate Limiting**: Implement rate limiting for email sending
+- **Authentication**: Use proper SMTP authentication
+
+## Common Mail Patterns
+
+### Welcome Email
+```go
+// Welcome email Mailable
+type WelcomeEmail struct {
+    User *User
+}
+
+func (m *WelcomeEmail) Content() *mail.Content {
+    return &mail.Content{
+        Html: fmt.Sprintf(`
+            <h1>Welcome to Goravel, %s!</h1>
+            <p>Thank you for joining us. We're excited to have you on board.</p>
+            <p>Best regards,<br>The Goravel Team</p>
+        `, m.User.Name),
+    }
+}
+
+func (m *WelcomeEmail) Envelope() *mail.Envelope {
+    return &mail.Envelope{
+        To:      []string{m.User.Email},
+        Subject: "Welcome to Goravel",
+    }
+}
+```
+
+### Password Reset Email
+```go
+// Password reset email Mailable
+type PasswordResetEmail struct {
+    User  *User
+    Token string
+}
+
+func (m *PasswordResetEmail) Content() *mail.Content {
+    resetUrl := fmt.Sprintf("%s/reset-password?token=%s", 
+        facades.Config().GetString("app.url"), m.Token)
+    
+    return &mail.Content{
+        Html: fmt.Sprintf(`
+            <h1>Password Reset Request</h1>
+            <p>Hello %s,</p>
+            <p>You requested a password reset. Click the link below to reset your password:</p>
+            <a href="%s">Reset Password</a>
+            <p>This link will expire in 1 hour.</p>
+        `, m.User.Name, resetUrl),
+    }
+}
+
+func (m *PasswordResetEmail) Envelope() *mail.Envelope {
+    return &mail.Envelope{
+        To:      []string{m.User.Email},
+        Subject: "Password Reset Request",
+    }
+}
+```
+
+### Notification Email
+```go
+// Notification email Mailable
+type NotificationEmail struct {
+    User         *User
+    Notification *Notification
+}
+
+func (m *NotificationEmail) Content() *mail.Content {
+    return &mail.Content{
+        Html: fmt.Sprintf(`
+            <h1>New Notification</h1>
+            <p>Hello %s,</p>
+            <p>%s</p>
+            <p>View your notifications: <a href="%s/notifications">Click here</a></p>
+        `, m.User.Name, m.Notification.Message, 
+           facades.Config().GetString("app.url")),
+    }
+}
+
+func (m *NotificationEmail) Envelope() *mail.Envelope {
+    return &mail.Envelope{
+        To:      []string{m.User.Email},
+        Subject: "New Notification",
+    }
+}
+```
+
+## Development Guidelines
+
+### Mail Organization
+- **Mailable Classes**: Organize Mailable classes by purpose
+- **Template Structure**: Use consistent template structure
+- **Error Handling**: Implement comprehensive error handling
+- **Testing**: Test email functionality thoroughly
+
+### Testing Mail
+```go
+// Test mail functionality
+func TestWelcomeEmail(t *testing.T) {
+    user := &User{Name: "John Doe", Email: "john@example.com"}
+    email := mails.NewWelcomeEmail(user)
+    
+    // Test envelope
+    envelope := email.Envelope()
+    assert.Equal(t, []string{"john@example.com"}, envelope.To)
+    assert.Equal(t, "Welcome to Goravel", envelope.Subject)
+    
+    // Test content
+    content := email.Content()
+    assert.Contains(t, content.Html, "Welcome to Goravel, John Doe!")
+}
+```
+
+### Monitoring and Maintenance
+- **Delivery Tracking**: Monitor email delivery rates
+- **Error Logging**: Log email sending errors
+- **Queue Monitoring**: Monitor queue processing
+- **Performance Metrics**: Track email performance
+
+## Best Practices
+
+### Mail Design
+- **Clear Subject Lines**: Use descriptive email subjects
+- **Responsive Templates**: Design mobile-friendly email templates
+- **Consistent Branding**: Maintain consistent email branding
+- **Unsubscribe Links**: Include unsubscribe links in marketing emails
+
+### Performance
+- **Queue Usage**: Use queues for non-critical emails
+- **Template Optimization**: Optimize email templates for performance
+- **Attachment Management**: Manage attachment sizes efficiently
+- **Batch Processing**: Process emails in batches when possible
+
+### Security
+- **Input Validation**: Validate all email inputs
+- **Attachment Security**: Secure attachment handling
+- **Rate Limiting**: Implement appropriate rate limiting
+- **Authentication**: Use secure SMTP authentication
+
+### Reliability
+- **Error Handling**: Implement comprehensive error handling
+- **Retry Logic**: Implement retry logic for failed emails
+- **Monitoring**: Monitor email delivery and failures
+- **Fallback Options**: Implement fallback email options

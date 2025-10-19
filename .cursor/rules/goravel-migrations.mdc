@@ -1,0 +1,765 @@
+---
+alwaysApply: true
+---
+
+# Goravel Database Migrations
+
+Based on the [official Goravel migrations documentation](https://www.goravel.dev/database/migrations.html).
+
+## Migrations Overview
+
+### Introduction
+- **Version Control**: Database migration provides version control for database structure
+- **Team Collaboration**: Ensures consistency across all developers working on the same project
+- **Standardized Structure**: Prevents chaos from individual database changes
+- **Schema Management**: Systematic approach to database schema evolution
+
+### Key Concepts
+- **Migration Files**: Stored in [database/migrations](mdc:database/migrations) directory
+- **Schema Facade**: Access schema functionality through `facades.Schema()`
+- **Blueprint**: Schema definition interface for table operations
+- **Up/Down Methods**: Forward and reverse migration operations
+- **Timestamp Ordering**: Migrations executed in chronological order
+
+## Configuration
+
+### Migration Configuration
+```go
+// config/database.go
+"migrations": map[string]any{
+    // Customize the table name of migrations
+    "table": "migrations",
+},
+```
+
+### Migration Table
+- **Default Table**: `migrations` table stores migration history
+- **Customizable**: Can change table name in configuration
+- **Batch Tracking**: Groups migrations by execution batch
+- **Status Tracking**: Tracks which migrations have been run
+
+## Create Migrations
+
+### Basic Migration Creation
+```bash
+# Create migration using Artisan command
+go run . artisan make:migration create_users_table
+
+# Create migration for specific table
+go run . artisan make:migration create_posts_table
+
+# Create migration for adding columns
+go run . artisan make:migration add_avatar_to_users_table
+```
+
+### Quick Create Patterns
+
+#### Table Creation Patterns
+```bash
+# Pattern: create_(\w+)_table$
+# Pattern: create_(\w+)$
+go run . artisan make:migration create_users_table
+go run . artisan make:migration create_posts
+```
+
+#### Column Addition Patterns
+```bash
+# Pattern: _(to|from|in)_(\w+)_table$
+# Pattern: _(to|from|in)_(\w+)$
+go run . artisan make:migration add_avatar_to_users_table
+go run . artisan make:migration add_status_to_posts
+go run . artisan make:migration remove_email_from_users_table
+```
+
+### Migration File Structure
+- **Timestamp Prefix**: Each migration file begins with timestamp
+- **Execution Order**: Goravel uses timestamps to determine execution order
+- **Unique Naming**: Migration names must be unique
+- **Auto Registration**: Framework automatically registers generated migrations
+
+## Migration Structure
+
+### Go Language Migration
+```go
+package migrations
+
+import (
+    "github.com/goravel/framework/contracts/database/schema"
+    "github.com/goravel/framework/facades"
+)
+
+type M20241207095921CreateUsersTable struct {
+}
+
+// Signature The unique signature for the migration
+func (r *M20241207095921CreateUsersTable) Signature() string {
+    return "20241207095921_create_users_table"
+}
+
+// Up Run the migrations
+func (r *M20241207095921CreateUsersTable) Up() error {
+    if !facades.Schema().HasTable("users") {
+        return facades.Schema().Create("users", func(table schema.Blueprint) {
+            table.ID()
+            table.String("name").Nullable()
+            table.String("email").Nullable()
+            table.Timestamps()
+        })
+    }
+    return nil
+}
+
+// Down Reverse the migrations
+func (r *M20241207095921CreateUsersTable) Down() error {
+    return facades.Schema().DropIfExists("users")
+}
+```
+
+### Set Migration Connection
+```go
+// Use different database connection for migration
+func (r *M20241207095921CreateUsersTable) Connection() string {
+    return "connection-name"
+}
+```
+
+## Register Migrations
+
+### Manual Registration
+```go
+// database/kernel.go
+func (kernel Kernel) Migrations() []schema.Migration {
+    return []schema.Migration{
+        &migrations.M20241207095921CreateUsersTable{},
+        &migrations.M20241207095922CreatePostsTable{},
+        &migrations.M20241207095923AddAvatarToUsersTable{},
+    }
+}
+```
+
+### Auto Registration
+- **Artisan Generated**: Framework automatically registers migrations created with `make:migration`
+- **Manual Addition**: Add custom migrations to [database/kernel.go](mdc:database/kernel.go)
+- **Import Management**: Ensure proper import statements for migration packages
+
+## Run Migrations
+
+### Basic Migration Commands
+```bash
+# Run all outstanding migrations
+go run . artisan migrate
+
+# Check migration status
+go run . artisan migrate:status
+
+# Run specific migration
+go run . artisan migrate --path=database/migrations/20241207095921_create_users_table.go
+```
+
+### Migration Status
+```bash
+# View migration status
+go run . artisan migrate:status
+
+# Output shows:
+# - Migration name
+# - Batch number
+# - Execution status
+# - Run time
+```
+
+## Rolling Back Migrations
+
+### Basic Rollback
+```bash
+# Roll back last batch of migrations
+go run . artisan migrate:rollback
+
+# Roll back specific number of migrations
+go run . artisan migrate:rollback --step=5
+
+# Roll back all migrations
+go run . artisan migrate:reset
+```
+
+### Advanced Rollback Commands
+```bash
+# Roll back and re-migrate all migrations
+go run . artisan migrate:refresh
+
+# Roll back and re-migrate specific number
+go run . artisan migrate:refresh --step=5
+
+# Drop all tables and re-migrate
+go run . artisan migrate:fresh
+```
+
+### Rollback Strategies
+- **Batch Rollback**: Rolls back entire batch of migrations
+- **Step Rollback**: Rolls back specific number of migrations
+- **Full Reset**: Rolls back all migrations
+- **Fresh Start**: Drops all tables and re-migrates
+
+## Tables
+
+### Create Table
+```go
+// Basic table creation
+facades.Schema().Create("users", func(table schema.Blueprint) {
+    table.ID()
+    table.String("name").Nullable()
+    table.String("email").Nullable()
+    table.Timestamps()
+})
+
+// Table with constraints
+facades.Schema().Create("posts", func(table schema.Blueprint) {
+    table.ID()
+    table.String("title")
+    table.Text("content")
+    table.UnsignedBigInteger("user_id")
+    table.Timestamps()
+    table.SoftDeletes()
+})
+```
+
+### Check Table/Column Existence
+```go
+// Check if table exists
+if facades.Schema().HasTable("users") {
+    // Table exists
+}
+
+// Check if column exists
+if facades.Schema().HasColumn("users", "email") {
+    // Column exists
+}
+
+// Check if multiple columns exist
+if facades.Schema().HasColumns("users", []string{"name", "email"}) {
+    // All columns exist
+}
+
+// Check if index exists
+if facades.Schema().HasIndex("users", "email_unique") {
+    // Index exists
+}
+```
+
+### Database Connection
+```go
+// Use specific database connection
+facades.Schema().Connection("sqlite").Create("users", func(table schema.Blueprint) {
+    table.ID()
+})
+
+// Use different connection for migration
+facades.Schema().Connection("mysql").Create("posts", func(table schema.Blueprint) {
+    table.ID()
+    table.String("title")
+})
+```
+
+### Update Table
+```go
+// Modify existing table
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.String("name").Nullable()
+    table.String("email").Unique()
+})
+
+// Add columns to existing table
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.String("avatar").Nullable()
+    table.String("phone").Nullable()
+})
+```
+
+### Rename Column
+```go
+// Rename column
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.RenameColumn("old_name", "new_name")
+})
+
+// Rename multiple columns
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.RenameColumn("first_name", "name")
+    table.RenameColumn("last_name", "surname")
+})
+```
+
+### Add Table Comment
+```go
+// Add comment to table
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.Comment("User table for storing user information")
+})
+```
+
+### Rename/Drop Table
+```go
+// Rename table
+facades.Schema().Rename("users", "new_users")
+
+// Drop table
+facades.Schema().Drop("users")
+
+// Drop table if exists
+facades.Schema().DropIfExists("users")
+```
+
+## Columns
+
+### Available Column Types
+
+#### Boolean Types
+```go
+// Boolean column
+table.Boolean("is_active")
+table.Boolean("is_verified").Default(false)
+```
+
+#### String & Text Types
+```go
+// String types
+table.String("name", 255)           // Char with length
+table.String("email").Unique()     // String with unique constraint
+table.Text("description")          // Text column
+table.LongText("content")          // LongText column
+table.MediumText("summary")        // MediumText column
+table.TinyText("excerpt")         // TinyText column
+table.Json("metadata")             // JSON column
+table.Uuid("uuid")                 // UUID column
+table.Ulid("ulid")                 // ULID column
+```
+
+#### Numeric Types
+```go
+// Integer types
+table.ID()                         // BigIncrements primary key
+table.BigIncrements("id")          // BigIncrements
+table.Increments("id")             // Increments
+table.Integer("age")               // Integer
+table.BigInteger("user_id")        // BigInteger
+table.SmallInteger("status")       // SmallInteger
+table.TinyInteger("priority")      // TinyInteger
+table.MediumInteger("count")       // MediumInteger
+
+// Unsigned integers
+table.UnsignedBigInteger("user_id")
+table.UnsignedInteger("votes")
+table.UnsignedSmallInteger("level")
+table.UnsignedTinyInteger("type")
+
+// Decimal types
+table.Decimal("price", 8, 2)        // Decimal with precision
+table.Double("rate")                // Double
+table.Float("percentage")           // Float
+```
+
+#### Date & Time Types
+```go
+// Date and time types
+table.Date("birth_date")            // Date
+table.DateTime("created_at")        // DateTime
+table.DateTimeTz("updated_at")      // DateTime with timezone
+table.Time("start_time")            // Time
+table.TimeTz("end_time")            // Time with timezone
+table.Timestamp("published_at")     // Timestamp
+table.TimestampTz("expires_at")     // Timestamp with timezone
+
+// Timestamps
+table.Timestamps()                  // created_at, updated_at
+table.TimestampsTz()                // created_at, updated_at with timezone
+
+// Soft deletes
+table.SoftDeletes()                 // deleted_at
+table.SoftDeletesTz()              // deleted_at with timezone
+```
+
+#### Other Types
+```go
+// Enum types
+table.Enum("difficulty", []any{"easy", "medium", "hard"})
+table.Enum("status", []any{1, 2, 3})
+
+// Morph types
+table.Morphs("morphable")           // morphable_type, morphable_id
+table.NullableMorphs("morphable")  // Nullable morphs
+table.NumericMorphs("morphable")    // Numeric morphs
+table.UuidMorphs("morphable")      // UUID morphs
+table.UlidMorphs("morphable")       // ULID morphs
+```
+
+### Special Column Types
+
+#### ID Column
+```go
+// Default ID column
+table.ID()
+
+// Custom ID column name
+table.ID("user_id")
+
+// BigIncrements alias
+table.BigIncrements("id")
+```
+
+#### SoftDeletes
+```go
+// Soft delete column
+table.SoftDeletes()
+
+// Soft delete with timezone
+table.SoftDeletesTz()
+```
+
+#### Custom Column
+```go
+// Custom column type
+table.Column("geometry", "geometry")
+table.Column("coordinates", "point")
+```
+
+### Column Modifiers
+
+#### Basic Modifiers
+```go
+// Nullable column
+table.String("name").Nullable()
+
+// Default value
+table.String("status").Default("active")
+
+// Auto increment
+table.Integer("id").AutoIncrement()
+
+// Unsigned integer
+table.Integer("age").Unsigned()
+
+// Column comment
+table.String("email").Comment("User email address")
+```
+
+#### Advanced Modifiers
+```go
+// After specific column (MySQL only)
+table.String("middle_name").After("first_name")
+
+// First column (MySQL only)
+table.String("id").First()
+
+// Use current timestamp
+table.Timestamp("created_at").UseCurrent()
+
+// Use current on update (MySQL only)
+table.Timestamp("updated_at").UseCurrentOnUpdate()
+
+// Generated column (PostgreSQL only)
+table.String("full_name").GeneratedAs("CONCAT(first_name, ' ', last_name)")
+
+// Always generated (PostgreSQL only)
+table.String("uuid").Always()
+```
+
+#### Change Column
+```go
+// Modify existing column
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.String("name", 100).Change()  // Change column type
+    table.String("email").Nullable().Change()  // Change to nullable
+})
+```
+
+### Drop Column
+```go
+// Drop single column
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.DropColumn("name")
+})
+
+// Drop multiple columns
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.DropColumn("name", "age", "phone")
+})
+```
+
+## Indexes
+
+### Create Index
+
+#### Primary Keys
+```go
+// Single primary key
+table.Primary("id")
+
+// Composite primary key
+table.Primary("id", "name")
+```
+
+#### Unique Indexes
+```go
+// Single unique index
+table.Unique("email")
+
+// Composite unique index
+table.Unique("email", "phone")
+
+// Named unique index
+table.Unique("email").Name("users_email_unique")
+```
+
+#### Normal Indexes
+```go
+// Single index
+table.Index("name")
+
+// Composite index
+table.Index("name", "email")
+
+// Named index
+table.Index("name").Name("users_name_index")
+```
+
+#### Full-Text Indexes
+```go
+// Single full-text index
+table.FullText("content")
+
+// Composite full-text index
+table.FullText("title", "content")
+
+// Named full-text index
+table.FullText("content").Name("posts_content_fulltext")
+```
+
+### Rename Index
+```go
+// Rename index
+facades.Schema().Table("users", func(table schema.Blueprint) {
+    table.RenameIndex("users_name_index", "users_name")
+})
+```
+
+### Drop Index
+
+#### Drop by Column
+```go
+// Drop primary key
+table.DropPrimary("id")
+
+// Drop unique index
+table.DropUnique("email")
+
+// Drop normal index
+table.DropIndex("name")
+
+// Drop full-text index
+table.DropFullText("content")
+```
+
+#### Drop by Name
+```go
+// Drop unique index by name
+table.DropUniqueByName("email_unique")
+
+// Drop index by name
+table.DropIndexByName("name_index")
+
+// Drop full-text index by name
+table.DropFullTextByName("content_fulltext")
+```
+
+### Foreign Keys
+
+#### Create Foreign Key
+```go
+// Basic foreign key
+facades.Schema().Table("posts", func(table schema.Blueprint) {
+    table.UnsignedBigInteger("user_id")
+    table.Foreign("user_id").References("id").On("users")
+})
+
+// Foreign key with cascade
+facades.Schema().Table("posts", func(table schema.Blueprint) {
+    table.UnsignedBigInteger("user_id")
+    table.Foreign("user_id").References("id").On("users").OnDelete("cascade")
+})
+
+// Foreign key with custom name
+facades.Schema().Table("posts", func(table schema.Blueprint) {
+    table.UnsignedBigInteger("user_id")
+    table.Foreign("user_id").References("id").On("users").Name("posts_user_id_foreign")
+})
+```
+
+#### Drop Foreign Key
+```go
+// Drop foreign key by column
+facades.Schema().Table("posts", func(table schema.Blueprint) {
+    table.DropForeign("user_id")
+})
+
+// Drop foreign key by name
+facades.Schema().Table("posts", func(table schema.Blueprint) {
+    table.DropForeignByName("posts_user_id_foreign")
+})
+```
+
+## Advanced Migration Patterns
+
+### Conditional Migrations
+```go
+// Conditional table creation
+func (r *M20241207095921CreateUsersTable) Up() error {
+    if !facades.Schema().HasTable("users") {
+        return facades.Schema().Create("users", func(table schema.Blueprint) {
+            table.ID()
+            table.String("name")
+            table.String("email").Unique()
+            table.Timestamps()
+        })
+    }
+    return nil
+}
+```
+
+### Data Migrations
+```go
+// Migration with data operations
+func (r *M20241207095921UpdateUsersTable) Up() error {
+    // Add column
+    err := facades.Schema().Table("users", func(table schema.Blueprint) {
+        table.String("status").Default("active")
+    })
+    if err != nil {
+        return err
+    }
+    
+    // Update existing data
+    return facades.DB().Table("users").Where("status", "").Update("status", "active")
+}
+```
+
+### Complex Schema Changes
+```go
+// Complex migration with multiple operations
+func (r *M20241207095921RefactorUsersTable) Up() error {
+    // Add new columns
+    err := facades.Schema().Table("users", func(table schema.Blueprint) {
+        table.String("first_name")
+        table.String("last_name")
+        table.String("middle_name").Nullable()
+    })
+    if err != nil {
+        return err
+    }
+    
+    // Migrate data
+    var users []User
+    err = facades.DB().Table("users").Get(&users)
+    if err != nil {
+        return err
+    }
+    
+    for _, user := range users {
+        // Split name into first and last name
+        names := strings.Split(user.Name, " ")
+        if len(names) >= 2 {
+            facades.DB().Table("users").Where("id", user.ID).Update(map[string]any{
+                "first_name": names[0],
+                "last_name":  names[len(names)-1],
+            })
+        }
+    }
+    
+    // Drop old column
+    return facades.Schema().Table("users", func(table schema.Blueprint) {
+        table.DropColumn("name")
+    })
+}
+```
+
+## Migration Best Practices
+
+### Design Principles
+- **Atomic Operations**: Each migration should be atomic and reversible
+- **Data Safety**: Always backup data before complex migrations
+- **Testing**: Test migrations in development environment first
+- **Documentation**: Document complex migration logic
+
+### Performance Considerations
+- **Batch Operations**: Use batch operations for large data migrations
+- **Index Management**: Add indexes after data migration for better performance
+- **Column Addition**: Add nullable columns first, then populate data
+- **Downtime Planning**: Plan for maintenance windows for complex migrations
+
+### Security Considerations
+- **Data Validation**: Validate data during migration
+- **Access Control**: Ensure proper database permissions
+- **Rollback Planning**: Always have rollback strategy
+- **Audit Logging**: Log migration operations for audit trail
+
+## Development Guidelines
+
+### Migration Organization
+- **Naming Convention**: Use descriptive migration names
+- **Single Purpose**: Each migration should have single purpose
+- **Order Management**: Maintain proper migration order
+- **Version Control**: Keep migrations in version control
+
+### Testing Migrations
+```go
+// Test migration up
+func TestMigrationUp(t *testing.T) {
+    migration := &M20241207095921CreateUsersTable{}
+    err := migration.Up()
+    assert.NoError(t, err)
+    
+    // Verify table exists
+    assert.True(t, facades.Schema().HasTable("users"))
+}
+
+// Test migration down
+func TestMigrationDown(t *testing.T) {
+    migration := &M20241207095921CreateUsersTable{}
+    err := migration.Down()
+    assert.NoError(t, err)
+    
+    // Verify table doesn't exist
+    assert.False(t, facades.Schema().HasTable("users"))
+}
+```
+
+### Monitoring and Maintenance
+- **Migration Status**: Monitor migration status regularly
+- **Performance Impact**: Monitor migration performance
+- **Error Tracking**: Track migration errors and failures
+- **Backup Strategy**: Implement proper backup strategies
+
+## Best Practices
+
+### Migration Design
+- **Reversible**: Always implement Down method
+- **Idempotent**: Migrations should be safe to run multiple times
+- **Atomic**: Each migration should be atomic
+- **Documented**: Document complex migration logic
+
+### Performance
+- **Efficient Operations**: Use efficient database operations
+- **Batch Processing**: Process large datasets in batches
+- **Index Management**: Manage indexes appropriately
+- **Connection Management**: Use appropriate database connections
+
+### Security
+- **Data Protection**: Protect sensitive data during migration
+- **Access Control**: Implement proper access controls
+- **Audit Trail**: Maintain audit trail of migrations
+- **Rollback Safety**: Ensure safe rollback procedures
+
+### Reliability
+- **Error Handling**: Implement comprehensive error handling
+- **Testing**: Test migrations thoroughly
+- **Monitoring**: Monitor migration execution
+- **Recovery**: Implement recovery procedures for failed migrations

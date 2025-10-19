@@ -1,0 +1,561 @@
+---
+alwaysApply: true
+---
+
+# Goravel Logging System
+
+Based on the [official Goravel logging documentation](https://www.goravel.dev/the-basics/logging.html).
+
+## Logging Overview
+
+### Introduction
+- **Powerful Log Service**: Record log messages and system errors to files or other channels
+- **Facade Access**: Access logging functionality through `facades.Log()`
+- **Multiple Channels**: Support for various logging channels and drivers
+- **Application Monitoring**: Understand application running status through comprehensive logging
+
+### Key Concepts
+- **Log Facade**: Access logging functionality through `facades.Log()`
+- **Channel Drivers**: Multiple drivers (stack, single, daily, custom)
+- **Log Levels**: Debug, Info, Warning, Error, Fatal, Panic
+- **Context Injection**: Add context information to log entries
+
+## Configuration
+
+### Logging Configuration
+```go
+// config/logging.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("logging", map[string]interface{}{
+        // Logging Configuration
+        //
+        // Configure the default log channel
+        "default": config.Env("LOG_CHANNEL", "stack"),
+
+        // Configure log channels
+        "channels": map[string]any{
+            "stack": map[string]any{
+                "driver":   "stack",
+                "channels": []string{"single", "daily"},
+            },
+            "single": map[string]any{
+                "driver": "single",
+                "path":   "storage/logs/goravel.log",
+                "level":  "debug",
+                "print":  true, // Output to console
+            },
+            "daily": map[string]any{
+                "driver": "daily",
+                "path":   "storage/logs/goravel.log",
+                "level":  "debug",
+                "days":   7,    // Keep logs for 7 days
+                "print":  true, // Output to console
+            },
+            "custom": map[string]any{
+                "driver": "custom",
+                "via":    &CustomLogger{},
+            },
+        },
+    })
+}
+```
+
+### Environment Variables
+```bash
+# Logging configuration
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+```
+
+## Available Channel Drivers
+
+### Channel Driver Types
+| Name   | Description             |
+|--------|-------------------------|
+| stack  | Allow multiple channels |
+| single | Single log file         |
+| daily  | One log file per day    |
+| custom | Custom drive            |
+
+### Stack Channel
+```go
+// Stack channel forwards logs to multiple channels
+"stack": map[string]any{
+    "driver":   "stack",
+    "channels": []string{"single", "daily", "slack"},
+}
+```
+
+### Single Channel
+```go
+// Single log file
+"single": map[string]any{
+    "driver": "single",
+    "path":   "storage/logs/goravel.log",
+    "level":  "debug",
+    "print":  true, // Console output
+}
+```
+
+### Daily Channel
+```go
+// Daily log files with rotation
+"daily": map[string]any{
+    "driver": "daily",
+    "path":   "storage/logs/goravel.log",
+    "level":  "debug",
+    "days":   7,    // Keep for 7 days
+    "print":  true, // Console output
+}
+```
+
+### Custom Channel
+```go
+// Custom logging driver
+"custom": map[string]any{
+    "driver": "custom",
+    "via":    &CustomLogger{},
+}
+```
+
+## Context Injection
+
+### Inject HTTP Context
+```go
+// Inject HTTP context into logs
+facades.Log().WithContext(ctx).Info("Request processed")
+```
+
+### Context Usage Patterns
+```go
+// Controller with context logging
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Log with request context
+    facades.Log().WithContext(ctx).Info("User requested", map[string]any{
+        "user_id": ctx.Request().RouteInt("id"),
+    })
+    
+    // Process request
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Write Log Messages
+
+### Basic Log Methods
+```go
+// Debug level
+facades.Log().Debug("Debug message")
+facades.Log().Debugf("Debug message with %s", "format")
+
+// Info level
+facades.Log().Info("Info message")
+facades.Log().Infof("Info message with %s", "format")
+
+// Warning level
+facades.Log().Warning("Warning message")
+facades.Log().Warningf("Warning message with %s", "format")
+
+// Error level
+facades.Log().Error("Error message")
+facades.Log().Errorf("Error message with %s", "format")
+
+// Fatal level
+facades.Log().Fatal("Fatal message")
+facades.Log().Fatalf("Fatal message with %s", "format")
+
+// Panic level
+facades.Log().Panic("Panic message")
+facades.Log().Panicf("Panic message with %s", "format")
+```
+
+### Log with Context Data
+```go
+// Log with additional context
+facades.Log().Info("User action", map[string]any{
+    "user_id": 1,
+    "action":  "login",
+    "ip":      "192.168.1.1",
+})
+
+// Log with error context
+facades.Log().Error("Database error", map[string]any{
+    "error":   err.Error(),
+    "query":   "SELECT * FROM users",
+    "user_id": 1,
+})
+```
+
+### Write to Specific Channel
+```go
+// Write to specific channel
+facades.Log().Channel("single").Info("Single channel message")
+facades.Log().Channel("daily").Error("Daily channel error")
+
+// Write to multiple channels
+facades.Log().Stack([]string{"single", "slack"}).Info("Multi-channel message")
+```
+
+## Chain Methods
+
+### Available Chain Methods
+| Method    | Action                                                                 |
+|-----------|------------------------------------------------------------------------|
+| Code      | Set a code or slug that describes the log                             |
+| Hint      | Set a hint for faster debugging                                        |
+| In        | Set the feature category or domain in which the log entry is relevant |
+| Owner     | Useful for alerting purposes                                          |
+| Request   | Supplies a http.Request                                                |
+| Response  | Supplies a http.Response                                              |
+| Tags      | Add multiple tags, describing the feature returning an error            |
+| User      | Set the user associated with the log entry                             |
+| With      | Add key-value pairs to the context of the log entry                    |
+| WithTrace | Add stack information to the log entry                                 |
+
+### Chain Method Examples
+```go
+// User-specific logging
+facades.Log().User("John").Info("User action")
+
+// Code-based logging
+facades.Log().Code("AUTH_FAILED").Error("Authentication failed")
+
+// Feature-based logging
+facades.Log().In("authentication").Warning("Invalid credentials")
+
+// Owner-based logging
+facades.Log().Owner("admin").Error("System error")
+
+// Request-based logging
+facades.Log().Request(req).Info("Request processed")
+
+// Response-based logging
+facades.Log().Response(resp).Info("Response sent")
+
+// Tagged logging
+facades.Log().Tags("api", "user", "error").Error("API error")
+
+// Context-based logging
+facades.Log().With(map[string]any{
+    "user_id": 1,
+    "action":  "login",
+}).Info("User logged in")
+
+// Stack trace logging
+facades.Log().WithTrace().Error("Error with stack trace")
+```
+
+### Advanced Chain Method Usage
+```go
+// Complex logging with multiple chain methods
+facades.Log().
+    User("admin").
+    In("authentication").
+    Code("AUTH_SUCCESS").
+    With(map[string]any{
+        "ip":        "192.168.1.1",
+        "user_agent": "Mozilla/5.0",
+    }).
+    Info("Admin login successful")
+
+// Error logging with context
+facades.Log().
+    Code("DB_ERROR").
+    In("database").
+    Tags("critical", "database").
+    WithTrace().
+    Error("Database connection failed", map[string]any{
+        "error": err.Error(),
+        "host":  "localhost",
+        "port":  5432,
+    })
+```
+
+## Custom Log Channels
+
+### Creating Custom Channel
+```go
+// config/logging.go
+"custom": map[string]interface{}{
+    "driver": "custom",
+    "via":    &CustomLogger{},
+}
+```
+
+### Custom Logger Implementation
+```go
+// app/extensions/custom_logger.go
+package extensions
+
+import (
+    "fmt"
+    "github.com/goravel/framework/contracts/log"
+)
+
+type CustomLogger struct {
+}
+
+// Handle pass channel config path here
+func (logger *CustomLogger) Handle(channel string) (log.Hook, error) {
+    return &CustomHook{}, nil
+}
+
+type CustomHook struct {
+}
+
+// Levels monitoring level
+func (h *CustomHook) Levels() []log.Level {
+    return []log.Level{
+        log.DebugLevel,
+        log.InfoLevel,
+        log.WarningLevel,
+        log.ErrorLevel,
+        log.FatalLevel,
+        log.PanicLevel,
+    }
+}
+
+// Fire execute logic when trigger
+func (h *CustomHook) Fire(entry log.Entry) error {
+    fmt.Printf("context=%v level=%v time=%v message=%s", 
+        entry.Context(), 
+        entry.Level(), 
+        entry.Time(), 
+        entry.Message())
+    
+    return nil
+}
+```
+
+### Custom Logger with External Service
+```go
+// Slack logger example
+type SlackLogger struct {
+    webhookURL string
+}
+
+func (logger *SlackLogger) Handle(channel string) (log.Hook, error) {
+    return &SlackHook{
+        webhookURL: logger.webhookURL,
+    }, nil
+}
+
+type SlackHook struct {
+    webhookURL string
+}
+
+func (h *SlackHook) Levels() []log.Level {
+    return []log.Level{
+        log.ErrorLevel,
+        log.FatalLevel,
+        log.PanicLevel,
+    }
+}
+
+func (h *SlackHook) Fire(entry log.Entry) error {
+    // Send to Slack webhook
+    // Implementation depends on Slack API
+    return nil
+}
+```
+
+## Common Logging Patterns
+
+### Request Logging
+```go
+// Middleware for request logging
+func LoggingMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        start := time.Now()
+        
+        // Log request start
+        facades.Log().WithContext(ctx).Info("Request started", map[string]any{
+            "method": ctx.Request().Method(),
+            "path":   ctx.Request().Path(),
+            "ip":     ctx.Request().Ip(),
+        })
+        
+        ctx.Request().Next()
+        
+        // Log request completion
+        duration := time.Since(start)
+        facades.Log().WithContext(ctx).Info("Request completed", map[string]any{
+            "method":   ctx.Request().Method(),
+            "path":     ctx.Request().Path(),
+            "duration": duration,
+            "status":   ctx.Response().Status(),
+        })
+    }
+}
+```
+
+### Error Logging
+```go
+// Controller error logging
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.FindByID(ctx.Request().RouteInt("id"))
+    if err != nil {
+        facades.Log().Error("Failed to find user", map[string]any{
+            "user_id": ctx.Request().RouteInt("id"),
+            "error":   err.Error(),
+            "ip":      ctx.Request().Ip(),
+        })
+        
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+### Database Logging
+```go
+// Database operation logging
+func (r *UserRepository) Create(user *User) error {
+    facades.Log().In("database").Info("Creating user", map[string]any{
+        "user_id": user.ID,
+        "email":   user.Email,
+    })
+    
+    err := r.db.Create(user).Error
+    if err != nil {
+        facades.Log().In("database").Error("Failed to create user", map[string]any{
+            "user_id": user.ID,
+            "error":   err.Error(),
+        })
+        return err
+    }
+    
+    facades.Log().In("database").Info("User created successfully", map[string]any{
+        "user_id": user.ID,
+    })
+    
+    return nil
+}
+```
+
+### Authentication Logging
+```go
+// Authentication logging
+func (c *AuthController) Login(ctx http.Context) http.Response {
+    email := ctx.Request().Input("email")
+    
+    facades.Log().In("authentication").Info("Login attempt", map[string]any{
+        "email": email,
+        "ip":    ctx.Request().Ip(),
+    })
+    
+    user, err := c.authService.Authenticate(ctx.Request().All())
+    if err != nil {
+        facades.Log().In("authentication").Warning("Login failed", map[string]any{
+            "email": email,
+            "error": err.Error(),
+            "ip":    ctx.Request().Ip(),
+        })
+        
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid credentials",
+        })
+    }
+    
+    facades.Log().User(user.Name).In("authentication").Info("Login successful", map[string]any{
+        "user_id": user.ID,
+        "email":   user.Email,
+        "ip":      ctx.Request().Ip(),
+    })
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Logging Best Practices
+
+### Log Level Guidelines
+- **Debug**: Detailed information for debugging
+- **Info**: General information about application flow
+- **Warning**: Something unexpected happened but application continues
+- **Error**: Error occurred but application can continue
+- **Fatal**: Critical error that causes application to stop
+- **Panic**: Critical error that causes application to panic
+
+### Context Best Practices
+- **Include Relevant Data**: Add user ID, request ID, IP address
+- **Avoid Sensitive Data**: Don't log passwords, tokens, or personal information
+- **Use Consistent Keys**: Use consistent key names across the application
+- **Structured Logging**: Use structured data for better log analysis
+
+### Performance Considerations
+- **Async Logging**: Use async logging for high-volume applications
+- **Log Rotation**: Implement proper log rotation to manage disk space
+- **Log Levels**: Use appropriate log levels to control verbosity
+- **Context Size**: Keep context data reasonable to avoid performance impact
+
+## Development Guidelines
+
+### Log Organization
+- **Feature-based Logging**: Use `In()` method to categorize logs by feature
+- **User-based Logging**: Use `User()` method for user-specific actions
+- **Error Tracking**: Use consistent error codes and context
+- **Request Tracing**: Include request IDs for tracing requests
+
+### Testing Logging
+```go
+// Test logging functionality
+func TestLogging(t *testing.T) {
+    // Mock log facade
+    facades.Log = &MockLog{}
+    
+    // Test logging
+    facades.Log().Info("Test message")
+    
+    // Assertions
+    assert.True(t, mockLog.InfoCalled)
+}
+```
+
+### Monitoring and Alerting
+- **Error Monitoring**: Set up alerts for error-level logs
+- **Performance Monitoring**: Monitor log volume and performance
+- **Security Monitoring**: Monitor for security-related log events
+- **Business Metrics**: Use logs for business intelligence
+
+## Best Practices
+
+### Log Design
+- **Consistent Format**: Use consistent log message format
+- **Meaningful Messages**: Write clear, actionable log messages
+- **Appropriate Levels**: Use correct log levels for different situations
+- **Context Rich**: Include sufficient context for debugging
+
+### Security
+- **Data Protection**: Never log sensitive information
+- **Access Control**: Control access to log files
+- **Log Integrity**: Ensure log files are not tampered with
+- **Audit Trail**: Use logs for security auditing
+
+### Performance
+- **Efficient Logging**: Avoid expensive operations in log statements
+- **Log Rotation**: Implement proper log rotation
+- **Async Processing**: Use async logging for high-volume applications
+- **Resource Management**: Monitor log storage and processing resources
+
+### Monitoring
+- **Log Analysis**: Use log analysis tools for insights
+- **Alerting**: Set up alerts for critical log events
+- **Metrics**: Use logs to generate application metrics
+- **Troubleshooting**: Use logs for effective troubleshooting

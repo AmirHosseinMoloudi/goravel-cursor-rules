@@ -1,0 +1,614 @@
+---
+alwaysApply: true
+---
+
+# Goravel Fiber HTTP Driver Enforcement
+
+**CRITICAL**: Always use the [Goravel Fiber HTTP driver](https://github.com/goravel/fiber) for all HTTP-related operations in Goravel applications.
+
+## Fiber HTTP Driver Requirements
+
+### Mandatory Fiber Usage
+- **EVERY** HTTP server must use Fiber driver
+- **EVERY** route definition must use Fiber routing
+- **EVERY** middleware must be Fiber-compatible
+- **EVERY** HTTP context must use Fiber context
+- **EVERY** HTTP response must use Fiber response
+- **EVERY** HTTP request must use Fiber request
+- **EVERY** HTTP server configuration must use Fiber
+
+### Prohibited Non-Fiber Patterns
+```go
+// ❌ FORBIDDEN - Using standard net/http
+func main() {
+    http.HandleFunc("/", handler)
+    http.ListenAndServe(":8080", nil)
+}
+
+// ❌ FORBIDDEN - Using Gin framework
+func main() {
+    r := gin.Default()
+    r.GET("/", handler)
+    r.Run(":8080")
+}
+
+// ❌ FORBIDDEN - Using Echo framework
+func main() {
+    e := echo.New()
+    e.GET("/", handler)
+    e.Start(":8080")
+}
+```
+
+### Required Fiber Patterns
+```go
+// ✅ REQUIRED - Using Goravel Fiber driver
+package main
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/fiber"
+    "goravel/bootstrap"
+)
+
+func main() {
+    // Bootstrap Goravel framework
+    bootstrap.Boot()
+    
+    // Use Fiber HTTP driver
+    facades.Route().Get("/", func(ctx http.Context) http.Response {
+        return ctx.Response().Json(http.StatusOK, http.Json{
+            "message": "Hello from Goravel Fiber!",
+        })
+    })
+    
+    // Start Fiber server
+    facades.Route().Run(":8080")
+}
+```
+
+## Fiber Installation and Setup
+
+### Automatic Installation
+```bash
+# ✅ REQUIRED - Install Fiber driver automatically
+./artisan package:install github.com/goravel/fiber
+```
+
+### Manual Installation
+```go
+// ✅ REQUIRED - Manual Fiber driver setup
+// go.mod
+module goravel
+
+go 1.21
+
+require (
+    github.com/goravel/framework v1.16.x
+    github.com/goravel/fiber v1.4.x
+)
+
+// main.go
+package main
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/fiber"
+    "goravel/bootstrap"
+)
+
+func main() {
+    bootstrap.Boot()
+    
+    // Configure Fiber driver
+    facades.Route().Use(fiber.New())
+    
+    // Define routes
+    facades.Route().Get("/", func(ctx http.Context) http.Response {
+        return ctx.Response().Json(http.StatusOK, http.Json{
+            "message": "Goravel with Fiber",
+        })
+    })
+    
+    // Start server
+    facades.Route().Run(":8080")
+}
+```
+
+## Fiber Version Compatibility
+
+### Version Matrix
+```go
+// ✅ REQUIRED - Use correct version combinations
+// goravel/fiber v1.4.x -> goravel/framework v1.16.x
+// goravel/fiber v1.3.x -> goravel/framework v1.15.x
+// goravel/fiber v1.2.x -> goravel/framework v1.14.x
+// goravel/fiber v1.1.x -> goravel/framework v1.13.x
+
+// go.mod - Example for v1.4.x
+module goravel
+
+go 1.21
+
+require (
+    github.com/goravel/framework v1.16.x
+    github.com/goravel/fiber v1.4.x
+)
+```
+
+## Fiber Routing Configuration
+
+### Basic Routing
+```go
+// ✅ REQUIRED - Use Fiber routing patterns
+func setupRoutes() {
+    // GET routes
+    facades.Route().Get("/", func(ctx http.Context) http.Response {
+        return ctx.Response().Json(http.StatusOK, http.Json{
+            "message": "Welcome to Goravel Fiber",
+        })
+    })
+    
+    // POST routes
+    facades.Route().Post("/users", func(ctx http.Context) http.Response {
+        var user User
+        if err := ctx.Request().Bind(&user); err != nil {
+            return ctx.Response().Json(http.StatusBadRequest, http.Json{
+                "error": "Invalid request data",
+            })
+        }
+        
+        return ctx.Response().Json(http.StatusCreated, http.Json{
+            "user": user,
+        })
+    })
+    
+    // PUT routes
+    facades.Route().Put("/users/{id}", func(ctx http.Context) http.Response {
+        id := ctx.Request().RouteInt("id")
+        return ctx.Response().Json(http.StatusOK, http.Json{
+            "message": fmt.Sprintf("Updated user %d", id),
+        })
+    })
+    
+    // DELETE routes
+    facades.Route().Delete("/users/{id}", func(ctx http.Context) http.Response {
+        id := ctx.Request().RouteInt("id")
+        return ctx.Response().Json(http.StatusOK, http.Json{
+            "message": fmt.Sprintf("Deleted user %d", id),
+        })
+    })
+}
+```
+
+### Route Groups
+```go
+// ✅ REQUIRED - Use Fiber route groups
+func setupAPIRoutes() {
+    // API v1 routes
+    facades.Route().Group("api/v1", func(router route.Router) {
+        router.Get("/users", userController.Index)
+        router.Post("/users", userController.Store)
+        router.Get("/users/{id}", userController.Show)
+        router.Put("/users/{id}", userController.Update)
+        router.Delete("/users/{id}", userController.Destroy)
+    })
+    
+    // API v2 routes
+    facades.Route().Group("api/v2", func(router route.Router) {
+        router.Get("/users", userControllerV2.Index)
+        router.Post("/users", userControllerV2.Store)
+        router.Get("/users/{id}", userControllerV2.Show)
+        router.Put("/users/{id}", userControllerV2.Update)
+        router.Delete("/users/{id}", userControllerV2.Destroy)
+        // New v2 features
+        router.Get("/users/{id}/analytics", userControllerV2.GetAnalytics)
+    })
+}
+```
+
+## Fiber Middleware Configuration
+
+### CORS Middleware
+```go
+// ✅ REQUIRED - Use Fiber CORS middleware
+func setupMiddleware() {
+    // CORS middleware
+    facades.Route().Use(func(ctx http.Context) {
+        ctx.Response().Header("Access-Control-Allow-Origin", "*")
+        ctx.Response().Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        ctx.Response().Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        
+        if ctx.Request().Method() == "OPTIONS" {
+            ctx.Response().Status(http.StatusOK)
+            return
+        }
+        
+        ctx.Next()
+    })
+}
+```
+
+### Timeout Middleware
+```go
+// ✅ REQUIRED - Use Fiber timeout middleware
+func setupTimeoutMiddleware() {
+    facades.Route().Use(func(ctx http.Context) {
+        // Set timeout for requests
+        timeout := 30 * time.Second
+        
+        // Create context with timeout
+        ctx, cancel := context.WithTimeout(ctx.Context(), timeout)
+        defer cancel()
+        
+        // Process request
+        ctx.Next()
+    })
+}
+```
+
+### Authentication Middleware
+```go
+// ✅ REQUIRED - Use Fiber authentication middleware
+func AuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        token := ctx.Request().Header("Authorization")
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Validate token
+        if !validateToken(token) {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        ctx.Next()
+    }
+}
+```
+
+## Fiber Context Usage
+
+### Request Context
+```go
+// ✅ REQUIRED - Use Fiber request context
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Get route parameters
+    id := ctx.Request().RouteInt("id")
+    
+    // Get query parameters
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    // Get headers
+    userAgent := ctx.Request().Header("User-Agent")
+    contentType := ctx.Request().Header("Content-Type")
+    
+    // Get request body
+    var input CreateUserRequest
+    if err := ctx.Request().Bind(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid request data",
+        })
+    }
+    
+    // Get IP address
+    ip := ctx.Request().Ip()
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "id": id,
+        "page": page,
+        "limit": limit,
+        "user_agent": userAgent,
+        "content_type": contentType,
+        "ip": ip,
+    })
+}
+```
+
+### Response Context
+```go
+// ✅ REQUIRED - Use Fiber response context
+func (c *UserController) CreateUser(ctx http.Context) http.Response {
+    var input CreateUserRequest
+    if err := ctx.Request().Bind(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid request data",
+        })
+    }
+    
+    user, err := c.userService.CreateUser(input.Name, input.Email, input.Age)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+        })
+    }
+    
+    // Set response headers
+    ctx.Response().Header("Content-Type", "application/json")
+    ctx.Response().Header("X-Request-ID", ctx.Request().Header("X-Request-ID"))
+    
+    return ctx.Response().Json(http.StatusCreated, http.Json{
+        "user": user,
+        "message": "User created successfully",
+    })
+}
+```
+
+## Fiber View Rendering
+
+### Template Rendering
+```go
+// ✅ REQUIRED - Use Fiber view rendering
+func (c *UserController) Index(ctx http.Context) http.Response {
+    users, err := c.userService.GetUsers()
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    // Render template with Fiber
+    return ctx.Response().View("users.index", map[string]interface{}{
+        "users": users,
+        "title": "Users List",
+    })
+}
+
+// ✅ REQUIRED - Use Fiber view with data
+func (c *UserController) Show(ctx http.Context) http.Response {
+    id := ctx.Request().RouteInt("id")
+    
+    user, err := c.userService.GetUser(id)
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().View("users.show", map[string]interface{}{
+        "user": user,
+        "title": "User Details",
+    })
+}
+```
+
+## Fiber Static File Serving
+
+### Static File Configuration
+```go
+// ✅ REQUIRED - Use Fiber static file serving
+func setupStaticFiles() {
+    // Serve static files
+    facades.Route().Static("/static", "./public/static")
+    facades.Route().Static("/assets", "./public/assets")
+    facades.Route().Static("/uploads", "./storage/uploads")
+    
+    // Serve single file
+    facades.Route().Get("/favicon.ico", func(ctx http.Context) http.Response {
+        return ctx.Response().File("./public/favicon.ico")
+    })
+}
+```
+
+## Fiber Server Configuration
+
+### Server Setup
+```go
+// ✅ REQUIRED - Use Fiber server configuration
+func main() {
+    bootstrap.Boot()
+    
+    // Configure Fiber server
+    facades.Route().Use(fiber.New(fiber.Config{
+        // Server configuration
+        ServerHeader: "Goravel-Fiber",
+        AppName: "Goravel Application",
+        
+        // Request configuration
+        BodyLimit: 4 * 1024 * 1024, // 4MB
+        Concurrency: 256 * 1024,
+        
+        // Response configuration
+        DisableStartupMessage: false,
+        DisableDefaultDate: false,
+        DisableDefaultContentType: false,
+        
+        // Error handling
+        ErrorHandler: func(ctx http.Context, err error) error {
+            code := http.StatusInternalServerError
+            if e, ok := err.(*fiber.Error); ok {
+                code = e.Code
+            }
+            
+            return ctx.Response().Json(code, http.Json{
+                "error": err.Error(),
+            })
+        },
+    }))
+    
+    // Setup routes
+    setupRoutes()
+    
+    // Start server
+    facades.Route().Run(":8080")
+}
+```
+
+### Production Configuration
+```go
+// ✅ REQUIRED - Use Fiber production configuration
+func setupProductionServer() {
+    facades.Route().Use(fiber.New(fiber.Config{
+        // Production settings
+        ServerHeader: "Goravel-Fiber",
+        AppName: "Goravel Production",
+        
+        // Performance settings
+        BodyLimit: 10 * 1024 * 1024, // 10MB
+        Concurrency: 512 * 1024,
+        
+        // Security settings
+        DisableStartupMessage: true,
+        DisableDefaultDate: true,
+        
+        // Error handling
+        ErrorHandler: func(ctx http.Context, err error) error {
+            // Log error
+            facades.Log().Error("Fiber error", map[string]any{
+                "error": err.Error(),
+                "path": ctx.Request().Path(),
+                "method": ctx.Request().Method(),
+            })
+            
+            // Return generic error
+            return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+                "error": "Internal server error",
+            })
+        },
+    }))
+}
+```
+
+## Fiber Testing
+
+### Test Setup
+```go
+// ✅ REQUIRED - Use Fiber testing
+func TestUserController(t *testing.T) {
+    // Setup test server
+    app := fiber.New()
+    
+    // Setup routes
+    app.Get("/users", func(ctx *fiber.Ctx) error {
+        return ctx.JSON(fiber.Map{
+            "users": []string{"user1", "user2"},
+        })
+    })
+    
+    // Test GET request
+    req := httptest.NewRequest("GET", "/users", nil)
+    resp, err := app.Test(req)
+    
+    assert.NoError(t, err)
+    assert.Equal(t, 200, resp.StatusCode)
+}
+
+// ✅ REQUIRED - Use Fiber test helpers
+func TestUserControllerWithFiber(t *testing.T) {
+    // Create Fiber app
+    app := fiber.New()
+    
+    // Setup routes
+    app.Get("/users/{id}", func(ctx *fiber.Ctx) error {
+        id := ctx.Params("id")
+        return ctx.JSON(fiber.Map{
+            "id": id,
+            "name": "John Doe",
+        })
+    })
+    
+    // Test with parameters
+    req := httptest.NewRequest("GET", "/users/123", nil)
+    resp, err := app.Test(req)
+    
+    assert.NoError(t, err)
+    assert.Equal(t, 200, resp.StatusCode)
+    
+    // Parse response
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    
+    assert.Equal(t, "123", result["id"])
+    assert.Equal(t, "John Doe", result["name"])
+}
+```
+
+## Fiber Performance Optimization
+
+### Performance Configuration
+```go
+// ✅ REQUIRED - Use Fiber performance optimization
+func setupPerformanceOptimization() {
+    facades.Route().Use(fiber.New(fiber.Config{
+        // Performance settings
+        BodyLimit: 16 * 1024 * 1024, // 16MB
+        Concurrency: 1024 * 1024,
+        
+        // Compression
+        CompressLevel: fiber.CompressLevelDefault,
+        
+        // Keep-alive
+        DisableKeepalive: false,
+        
+        // Prefork
+        Prefork: false, // Set to true for production with multiple CPUs
+        
+        // Read timeout
+        ReadTimeout: 10 * time.Second,
+        WriteTimeout: 10 * time.Second,
+        IdleTimeout: 120 * time.Second,
+    }))
+}
+```
+
+## Fiber Security Configuration
+
+### Security Middleware
+```go
+// ✅ REQUIRED - Use Fiber security middleware
+func setupSecurityMiddleware() {
+    // Security headers
+    facades.Route().Use(func(ctx http.Context) {
+        ctx.Response().Header("X-Content-Type-Options", "nosniff")
+        ctx.Response().Header("X-Frame-Options", "DENY")
+        ctx.Response().Header("X-XSS-Protection", "1; mode=block")
+        ctx.Response().Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        ctx.Response().Header("Content-Security-Policy", "default-src 'self'")
+        
+        ctx.Next()
+    })
+    
+    // Rate limiting
+    facades.Route().Use(func(ctx http.Context) {
+        // Implement rate limiting logic
+        ctx.Next()
+    })
+}
+```
+
+## Best Practices
+
+### Design Principles
+- **Fiber First**: Always use Fiber for HTTP operations
+- **Performance**: Leverage Fiber's high performance
+- **Compatibility**: Maintain Goravel framework compatibility
+- **Security**: Implement proper security measures
+- **Testing**: Use Fiber testing utilities
+
+### Implementation Guidelines
+- **Route Definition**: Use Fiber routing patterns
+- **Middleware**: Implement Fiber-compatible middleware
+- **Context**: Use Fiber context for requests/responses
+- **Error Handling**: Implement Fiber error handling
+- **Performance**: Optimize for Fiber performance
+
+### Security Guidelines
+- **Headers**: Set appropriate security headers
+- **Validation**: Validate all inputs
+- **Authentication**: Implement proper authentication
+- **Rate Limiting**: Implement rate limiting
+- **CORS**: Configure CORS properly
+
+### Performance Guidelines
+- **Compression**: Enable compression
+- **Keep-Alive**: Use keep-alive connections
+- **Prefork**: Use prefork for production
+- **Timeouts**: Set appropriate timeouts
+- **Monitoring**: Monitor performance metrics

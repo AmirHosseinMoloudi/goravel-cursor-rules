@@ -1,0 +1,523 @@
+---
+alwaysApply: true
+---
+
+# Goravel Localization System
+
+Based on the [official Goravel localization documentation](https://www.goravel.dev/digging-deeper/localization.html).
+
+## Localization Overview
+
+### Introduction
+- **Multi-language Support**: Goravel's localization features provide a convenient way to retrieve strings in various languages
+- **Language Files**: Language strings are stored in files in the `lang` directory
+- **Flexible Organization**: Support for both flat and categorized language file structures
+- **Runtime Locale Switching**: Change language for individual HTTP requests
+
+### Key Concepts
+- **Language Facade**: Access localization functionality through `facades.Lang(ctx)`
+- **Locale Configuration**: Default and fallback locale settings
+- **Translation Strings**: Organized language files with nested structures
+- **Parameter Replacement**: Dynamic content in translation strings
+- **Pluralization**: Complex pluralization rules for different languages
+
+## Language File Organization
+
+### Flat Structure
+```
+/lang
+  en.json
+  cn.json
+  fr.json
+  es.json
+```
+
+### Categorized Structure
+```
+/lang
+  /en
+    user.json
+    product.json
+    order.json
+  /cn
+    user.json
+    product.json
+    order.json
+  /fr
+    user.json
+    product.json
+    order.json
+```
+
+## Configuring the Locale
+
+### Default Locale Configuration
+```go
+// config/app.go
+func init() {
+    config := facades.Config
+    config.Add("app", map[string]interface{}{
+        // Application Configuration
+        "locale": config.Env("APP_LOCALE", "en"),
+        "fallback_locale": "en",
+    })
+}
+```
+
+### Runtime Locale Setting
+```go
+// Set locale for specific HTTP request
+facades.Route().Get("/", func(ctx http.Context) http.Response {
+    facades.App().SetLocale(ctx, "en")
+    
+    return ctx.Response()
+})
+```
+
+### Environment Variables
+```bash
+# Locale configuration
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+```
+
+## Locale Detection
+
+### Current Locale Methods
+```go
+// Get current locale
+locale := facades.App().CurrentLocale(ctx)
+
+// Check if locale is specific value
+if facades.App().IsLocale(ctx, "en") {
+    // Handle English locale
+}
+
+// Check if locale is supported
+supportedLocales := []string{"en", "cn", "fr"}
+currentLocale := facades.App().CurrentLocale(ctx)
+for _, supported := range supportedLocales {
+    if facades.App().IsLocale(ctx, supported) {
+        // Handle supported locale
+        break
+    }
+}
+```
+
+### Locale Middleware
+```go
+// Middleware to detect locale from request
+func LocaleMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Detect locale from Accept-Language header
+        acceptLanguage := ctx.Request().Header("Accept-Language")
+        if acceptLanguage != "" {
+            // Parse and set locale
+            locale := parseAcceptLanguage(acceptLanguage)
+            facades.App().SetLocale(ctx, locale)
+        }
+        
+        ctx.Request().Next()
+    }
+}
+```
+
+## Defining Translation Strings
+
+### Single-Level Structure
+```json
+// lang/en.json
+{
+  "welcome": "Welcome to Goravel",
+  "goodbye": "Goodbye",
+  "error": "An error occurred"
+}
+```
+
+### Multi-Level Structure
+```json
+// lang/en.json
+{
+  "name": "It's your name",
+  "required": {
+    "user_id": "UserID is required",
+    "email": "Email is required",
+    "password": "Password is required"
+  },
+  "validation": {
+    "min_length": "Minimum length is :min characters",
+    "max_length": "Maximum length is :max characters"
+  }
+}
+```
+
+### Categorized Language Files
+```json
+// lang/en/user.json
+{
+  "profile": "User Profile",
+  "settings": "User Settings",
+  "logout": "Logout"
+}
+
+// lang/en/product.json
+{
+  "title": "Product Title",
+  "description": "Product Description",
+  "price": "Price"
+}
+```
+
+## Retrieving Translation Strings
+
+### Basic Translation Retrieval
+```go
+// Simple translation
+message := facades.Lang(ctx).Get("welcome")
+
+// Nested translation
+message := facades.Lang(ctx).Get("required.user_id")
+
+// Categorized translation
+message := facades.Lang(ctx).Get("user/profile")
+message := facades.Lang(ctx).Get("user/required.user_id")
+```
+
+### Translation with Default Values
+```go
+// Get translation with fallback
+message := facades.Lang(ctx).Get("nonexistent.key", "Default message")
+
+// Check if translation exists
+if facades.Lang(ctx).Has("welcome") {
+    message := facades.Lang(ctx).Get("welcome")
+}
+```
+
+### Controller Usage
+```go
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Get localized messages
+    welcomeMessage := facades.Lang(ctx).Get("welcome")
+    errorMessage := facades.Lang(ctx).Get("error")
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": welcomeMessage,
+    })
+}
+```
+
+## Parameter Replacement
+
+### Basic Parameter Replacement
+```json
+// lang/en.json
+{
+  "welcome": "Welcome, :name",
+  "user_profile": "Profile of :name (ID: :id)",
+  "item_count": "You have :count items"
+}
+```
+
+### Using Parameter Replacement
+```go
+// Replace single parameter
+message := facades.Lang(ctx).Get("welcome", translation.Option{
+    Replace: map[string]string{
+        "name": "John",
+    },
+})
+
+// Replace multiple parameters
+message := facades.Lang(ctx).Get("user_profile", translation.Option{
+    Replace: map[string]string{
+        "name": "John Doe",
+        "id":   "123",
+    },
+})
+```
+
+### Dynamic Parameter Replacement
+```go
+func (c *UserController) Show(ctx http.Context) http.Response {
+    userID := ctx.Request().RouteInt("id")
+    user := getUserByID(userID)
+    
+    message := facades.Lang(ctx).Get("user_profile", translation.Option{
+        Replace: map[string]string{
+            "name": user.Name,
+            "id":   fmt.Sprintf("%d", user.ID),
+        },
+    })
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": message,
+    })
+}
+```
+
+## Pluralization
+
+### Basic Pluralization
+```json
+// lang/en.json
+{
+  "apples": "There is one apple|There are many apples",
+  "items": "No items|One item|:count items"
+}
+```
+
+### Complex Pluralization Rules
+```json
+// lang/en.json
+{
+  "apples": "{0} There are none|[1,19] There are some|[20,*] There are many",
+  "minutes_ago": "{1} :value minute ago|[2,*] :value minutes ago"
+}
+```
+
+### Using Pluralization
+```go
+// Basic pluralization
+message := facades.Lang(ctx).Choice("apples", 1)  // "There is one apple"
+message := facades.Lang(ctx).Choice("apples", 5)  // "There are many apples"
+
+// Complex pluralization
+message := facades.Lang(ctx).Choice("apples", 0)   // "There are none"
+message := facades.Lang(ctx).Choice("apples", 10)  // "There are some"
+message := facades.Lang(ctx).Choice("apples", 25)  // "There are many"
+
+// Pluralization with parameters
+message := facades.Lang(ctx).Choice("minutes_ago", 5, translation.Option{
+    Replace: map[string]string{
+        "value": "5",
+    },
+})
+```
+
+### Pluralization in Controllers
+```go
+func (c *ProductController) Index(ctx http.Context) http.Response {
+    products := c.productService.GetAll()
+    count := len(products)
+    
+    message := facades.Lang(ctx).Choice("items", count, translation.Option{
+        Replace: map[string]string{
+            "count": fmt.Sprintf("%d", count),
+        },
+    })
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": message,
+        "products": products,
+    })
+}
+```
+
+## Embed Loading
+
+### Setting Up Embed Loading
+```go
+// lang/fs.go
+package lang
+
+import "embed"
+
+//go:embed *
+var FS embed.FS
+```
+
+### Configuration for Embed Loading
+```go
+// config/app.go
+import "lang"
+
+func init() {
+    config := facades.Config
+    config.Add("app", map[string]interface{}{
+        "locale": "en",
+        "fallback_locale": "en",
+        "lang_path": "lang",
+        "lang_fs":   lang.FS,
+    })
+}
+```
+
+### Embed Loading Benefits
+- **Binary Compilation**: Language files compiled into binary
+- **No Deployment**: No need to deploy language files separately
+- **Fallback Support**: Independent files take precedence over embedded files
+- **Performance**: Faster loading of translation strings
+
+## Advanced Localization Patterns
+
+### Locale-Specific Controllers
+```go
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Get user-specific messages
+    welcomeMessage := facades.Lang(ctx).Get("user.welcome")
+    profileMessage := facades.Lang(ctx).Get("user.profile")
+    
+    return ctx.Response().Success().Json(http.Json{
+        "messages": map[string]string{
+            "welcome": welcomeMessage,
+            "profile": profileMessage,
+        },
+    })
+}
+```
+
+### Validation Messages
+```json
+// lang/en/validation.json
+{
+  "required": ":field is required",
+  "email": ":field must be a valid email",
+  "min": ":field must be at least :min characters",
+  "max": ":field must not exceed :max characters"
+}
+```
+
+```go
+// Using validation messages
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Validate input
+    if err := c.validateUserInput(ctx); err != nil {
+        fieldName := "email"
+        message := facades.Lang(ctx).Get("validation.email", translation.Option{
+            Replace: map[string]string{
+                "field": fieldName,
+            },
+        })
+        
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": message,
+        })
+    }
+    
+    // Continue with user creation
+}
+```
+
+### API Response Messages
+```json
+// lang/en/api.json
+{
+  "success": {
+    "created": ":resource created successfully",
+    "updated": ":resource updated successfully",
+    "deleted": ":resource deleted successfully"
+  },
+  "error": {
+    "not_found": ":resource not found",
+    "unauthorized": "Unauthorized access",
+    "server_error": "Internal server error"
+  }
+}
+```
+
+```go
+// Using API messages
+func (c *UserController) Store(ctx http.Context) http.Response {
+    user, err := c.userService.Create(ctx.Request().All())
+    if err != nil {
+        message := facades.Lang(ctx).Get("api.error.server_error")
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": message,
+        })
+    }
+    
+    message := facades.Lang(ctx).Get("api.success.created", translation.Option{
+        Replace: map[string]string{
+            "resource": "User",
+        },
+    })
+    
+    return ctx.Response().Created().Json(http.Json{
+        "message": message,
+        "user": user,
+    })
+}
+```
+
+## Localization Best Practices
+
+### Design Principles
+- **Consistent Structure**: Use consistent language file structure
+- **Meaningful Keys**: Use descriptive keys for translation strings
+- **Parameter Safety**: Always provide fallback values for parameters
+- **Locale Validation**: Validate locale settings and fallbacks
+
+### Performance Considerations
+- **Caching**: Cache frequently used translations
+- **Lazy Loading**: Load language files only when needed
+- **Memory Management**: Monitor memory usage for large language files
+- **Embed Loading**: Use embed loading for better performance
+
+### Security Considerations
+- **Input Validation**: Validate all parameter replacements
+- **XSS Prevention**: Escape user input in translations
+- **Access Control**: Control access to language files
+- **Audit Logging**: Log locale changes for security auditing
+
+## Development Guidelines
+
+### Language File Organization
+- **Feature-based**: Organize translations by application features
+- **Consistent Naming**: Use consistent naming conventions
+- **Version Control**: Keep language files in version control
+- **Documentation**: Document translation key purposes
+
+### Testing Localization
+```go
+// Test localization functionality
+func TestLocalization(t *testing.T) {
+    // Test basic translation
+    message := facades.Lang(ctx).Get("welcome")
+    assert.Equal(t, "Welcome to Goravel", message)
+    
+    // Test parameter replacement
+    message = facades.Lang(ctx).Get("welcome", translation.Option{
+        Replace: map[string]string{
+            "name": "John",
+        },
+    })
+    assert.Contains(t, message, "John")
+    
+    // Test pluralization
+    message = facades.Lang(ctx).Choice("apples", 1)
+    assert.Equal(t, "There is one apple", message)
+}
+```
+
+### Monitoring and Maintenance
+- **Translation Coverage**: Monitor translation completeness
+- **Usage Analytics**: Track which translations are used most
+- **Performance Metrics**: Monitor translation loading performance
+- **Error Tracking**: Track missing translation errors
+
+## Best Practices
+
+### Localization Design
+- **User Experience**: Design translations for optimal user experience
+- **Cultural Sensitivity**: Consider cultural differences in translations
+- **Consistency**: Maintain consistency across all languages
+- **Accessibility**: Ensure translations are accessible
+
+### Performance
+- **Efficient Loading**: Optimize language file loading
+- **Caching Strategy**: Implement appropriate caching strategies
+- **Memory Usage**: Monitor memory usage for language files
+- **Response Time**: Optimize translation response times
+
+### Security
+- **Input Validation**: Validate all translation parameters
+- **XSS Prevention**: Prevent XSS attacks in translations
+- **Access Control**: Implement proper access control
+- **Audit Logging**: Log all locale changes
+
+### Reliability
+- **Error Handling**: Implement comprehensive error handling
+- **Fallback Strategy**: Implement proper fallback mechanisms
+- **Testing**: Test all translation scenarios
+- **Monitoring**: Monitor translation system health

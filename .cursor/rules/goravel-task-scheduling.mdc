@@ -1,0 +1,288 @@
+---
+alwaysApply: true
+---
+
+# Goravel Task Scheduling
+
+Based on the [official Goravel task scheduling documentation](https://www.goravel.dev/digging-deeper/task-scheduling.html).
+
+## Task Scheduling Overview
+
+### Introduction
+- **Command Scheduler**: Goravel's command scheduler offers a fresh approach to managing scheduled tasks on your server
+- **Simplified Cron**: Define command schedules within your Goravel application, requiring only a single cron entry on the server
+- **Source Control**: Task schedules are now in source control, making them easier to view, add, and edit
+- **Scheduler Facade**: Access scheduler functionality through `facades.Schedule()`
+
+### Key Concepts
+- **Scheduler Facade**: Access scheduler functionality through `facades.Schedule()`
+- **Schedule Definition**: Define tasks in the `Schedule` method of `app/console/kernel.go`
+- **Frequency Options**: Various methods for defining task execution frequency
+- **Task Overlap Prevention**: Mechanisms to prevent multiple instances of a task from running concurrently
+- **Single Server Execution**: Ensure tasks run on only one server in a multi-server environment
+
+## Defining Schedules
+
+### Scheduling Closures
+- **Location**: Define in the `Schedule` method in `app/console/kernel.go`
+- **Closure Execution**: Execute custom logic within a closure
+- **Example**: Clear a database table daily at midnight
+
+```go
+package console
+
+import (
+  "github.com/goravel/framework/contracts/console"
+  "github.com/goravel/framework/contracts/schedule"
+  "github.com/goravel/framework/facades"
+
+  "goravel/app/models"
+)
+
+type Kernel struct {
+}
+
+func (kernel Kernel) Schedule() []schedule.Event {
+  return []schedule.Event{
+    facades.Schedule().Call(func() {
+      facades.Orm().Query().Where("1 = 1").Delete(&models.User{})
+    }).Daily(),
+  }
+}
+```
+
+### Scheduling Artisan Commands
+- **Method**: Use the `Command` method to schedule Artisan commands
+- **Identification**: Schedule by command's name or class
+- **Example**: Schedule an email sending Artisan command daily
+
+```go
+package console
+
+import (
+  "github.com/goravel/framework/contracts/console"
+  "github.com/goravel/framework/contracts/schedule"
+  "github.com/goravel/framework/facades"
+)
+
+type Kernel struct {
+}
+
+func (kernel *Kernel) Schedule() []schedule.Event {
+  return []schedule.Event{
+    facades.Schedule().Command("send:emails name").Daily(),
+  }
+}
+```
+
+### Logging Level
+- **Debug Mode**: When `app.debug` is `true`, all logs are printed
+- **Production Mode**: Otherwise, only `error` level logs are printed
+
+### Schedule Frequency Options
+| Method                         | Description                                                  |
+| -------------------------- | --------------------------------------------------- |
+| `.Cron("* * * * *")`    | Custom Cron schedule (minutes)                     |
+| `.Cron("* * * * * *")` | Custom Cron schedule (seconds)                     |
+| `.EverySecond()`             | Run the task every second                           |
+| `.EveryTwoSeconds()`         | Run the task every two seconds                      |
+| `.EveryFiveSeconds()`        | Run the task every five seconds                     |
+| `.EveryTenSeconds()`         | Run the task every ten seconds                      |
+| `.EveryFifteenSeconds()`     | Run the task every fifteen seconds                  |
+| `.EveryTwentySeconds()`      | Run the task every twenty seconds                   |
+| `.EveryThirtySeconds()`      | Run the task every thirty seconds                   |
+| `.EveryMinute()`             | Run the task every minute                           |
+| `.EveryTwoMinutes()`         | Run the task every two minutes                      |
+| `.EveryThreeMinutes()`       | Run the task every three minutes                    |
+| `.EveryFourMinutes()`        | Run the task every four minutes                     |
+| `.EveryFiveMinutes()`        | Run the task every five minutes                     |
+| `.EveryTenMinutes()`         | Run the task every ten minutes                      |
+| `.EveryFifteenMinutes()`     | Run the task every fifteen minutes                  |
+| `.EveryThirtyMinutes()`      | Run the task every thirty minutes                   |
+| `.Hourly()`                  | Run the task every hour                             |
+| `.HourlyAt(17)`              | Run the task every hour at 17 minutes past the hour |
+| `.EveryTwoHours()`           | Run the task every two hours                        |
+| `.EveryThreeHours()`         | Run the task every three hours                      |
+| `.EveryFourHours()`          | Run the task every four hours                       |
+| `.EverySixHours()`           | Run the task every six hours                        |
+| `.Daily()`                   | Run the task every day at midnight                  |
+| `.DailyAt("13:00")`          | Run the task every day at 13:00                     |
+| `.Days(1, 3, 5)`             | Run the task every Monday, Wednesday, and Friday    |
+| `.Weekdays()`                | Run the task every Monday to Friday                 |
+| `.Weekends()`                | Run the task every Saturday and Sunday              |
+| `.Mondays()`                 | Run the task every Monday                           |
+| `.Tuesdays()`                | Run the task every Tuesday                          |
+| `.Wednesdays()`              | Run the task every Wednesday                        |
+| `.Thursdays()`               | Run the task every Thursday                         |
+| `.Fridays()`                 | Run the task every Friday                           |
+| `.Saturdays()`               | Run the task every Saturday                         |
+| `.Sundays()`                 | Run the task every Sunday                           |
+| `.Weekly()`                  | Run the task every week                             |
+| `.Monthly()`                 | Run the task every month                            |
+| `.Quarterly()`               | Run the task every quarter                          |
+| `.Yearly()`                  | Run the task every year                             |
+
+### Preventing Task Overlaps
+- **Default Behavior**: Scheduled tasks run even if previous instances are still active
+- **`.SkipIfStillRunning()`**: Prevents a task from running if a previous instance is still executing
+- **`.DelayIfStillRunning()`**: Delays the execution of a task if a previous instance is still executing
+
+```go
+facades.Schedule().Command("send:emails name").EveryMinute().SkipIfStillRunning()
+facades.Schedule().Command("send:emails name").EveryMinute().DelayIfStillRunning()
+```
+
+### Running Tasks On One Server
+- **Requirement**: Requires `memcached`, `dynamodb`, or `redis` cache driver as default
+- **Central Cache**: All servers must communicate with the same central cache server
+- **`.OnOneServer()` Method**: Ensures a scheduled job runs on only one server in a multi-server environment
+- **Atomic Lock**: The first server to receive the task secures an atomic lock
+- **Named Closures**: Scheduled closures must be assigned a name when using `OnOneServer()`
+
+```go
+facades.Schedule().Command("report:generate").Daily().OnOneServer()
+```
+```go
+facades.Schedule().Call(func() {
+  fmt.Println("goravel")
+}).Daily().OnOneServer().Name("goravel")
+```
+
+## Running The Scheduler
+
+### Starting the Scheduler
+- **Integration**: Add `go facades.Schedule().Run()` to the root `main.go` file
+- **Asynchronous Execution**: Runs the scheduler in a goroutine
+
+```go
+package main
+
+import (
+  "github.com/goravel/framework/facades"
+
+  "goravel/bootstrap"
+)
+
+func main() {
+  // This bootstraps the framework and gets it ready for use.
+  bootstrap.Boot()
+
+  // Start schedule by facades.Schedule
+  go facades.Schedule().Run()
+
+  select {}
+}
+```
+
+### Manually Running Tasks
+- **Artisan Command**: Use `schedule:run` command to manually trigger scheduled tasks
+
+```bash
+./artisan schedule:run
+```
+
+## Stopping The Scheduler
+
+### Graceful Shutdown
+- **`Shutdown()` Method**: Call `facades.Schedule().Shutdown()` to gracefully stop the scheduler
+- **Task Completion**: Waits for all currently running tasks to complete before shutting down
+- **OS Signal Handling**: Integrate with OS signals (`SIGINT`, `SIGTERM`) for controlled shutdown
+
+```go
+// main.go
+bootstrap.Boot()
+
+// Create a channel to listen for OS signals
+quit := make(chan os.Signal)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+// Start schedule by facades.Schedule
+go facades.Schedule().Run()
+
+// Listen for the OS signal
+go func() {
+  <-quit
+  if err := facades.Schedule().Shutdown(); err != nil {
+    facades.Log().Errorf("Schedule Shutdown error: %v", err)
+  }
+
+  os.Exit(0)
+}()
+
+select {}
+```
+
+## View All Tasks
+
+### Listing Scheduled Tasks
+- **Artisan Command**: Use `schedule:list` command to view all registered scheduled tasks
+
+```bash
+./artisan schedule:list
+```
+
+## Task Scheduling Best Practices
+
+### Design Principles
+- **Single Responsibility**: Each scheduled task should have a clear, single purpose
+- **Idempotency**: Design tasks to be idempotent, meaning they can be run multiple times without causing unintended side effects
+- **Error Handling**: Implement robust error handling and logging within scheduled tasks
+- **Monitoring**: Integrate tasks with monitoring systems to track execution status and failures
+
+### Performance Considerations
+- **Resource Management**: Optimize tasks to efficiently use CPU, memory, and I/O
+- **Concurrency**: Use `OnOneServer()` and overlap prevention methods to manage concurrency in distributed environments
+- **Queue Integration**: For long-running or resource-intensive tasks, consider dispatching them to a queue instead of running directly in the scheduler
+- **Database Optimization**: Ensure database queries within tasks are optimized with proper indexing and efficient query patterns
+
+### Security Considerations
+- **Least Privilege**: Ensure scheduled tasks run with the minimum necessary permissions
+- **Input Validation**: If tasks process external input, validate it thoroughly
+- **Sensitive Data**: Handle sensitive data securely within tasks and avoid logging it unnecessarily
+- **Audit Logging**: Log task execution, success, and failure for auditing and security analysis
+
+## Development Guidelines
+
+### Task Organization
+- **Centralized Definition**: Define all schedules in `app/console/kernel.go` for easy management
+- **Clear Naming**: Use descriptive names for Artisan commands and closures
+- **Documentation**: Document the purpose, frequency, and dependencies of each scheduled task
+- **Version Control**: Keep `app/console/kernel.go` under version control
+
+### Testing Task Schedules
+- **Unit Testing**: Test the logic within closures and Artisan commands independently
+- **Integration Testing**: Test the scheduler's ability to correctly trigger tasks at specified intervals (e.g., using mock time or dedicated test environments)
+- **Edge Cases**: Test scenarios like task overlaps, single-server execution, and error handling
+- **Artisan Commands**: Use `artisan schedule:run` and `artisan schedule:list` in test environments to verify task registration and execution
+
+### Monitoring and Maintenance
+- **Scheduler Health**: Monitor the health and uptime of the scheduler process
+- **Task Execution Logs**: Review logs for task successes, failures, and warnings
+- **Alerting**: Set up alerts for failed or long-running tasks
+- **Cleanup**: Implement mechanisms to clean up old task logs or temporary files generated by tasks
+
+## Best Practices
+
+### Scheduler Design
+- **Simplicity**: Keep schedule definitions simple and easy to understand
+- **Reliability**: Design tasks to be resilient to failures and include retry mechanisms if appropriate
+- **Scalability**: Consider how tasks will behave as your application scales
+- **Observability**: Ensure tasks provide sufficient logging and metrics for monitoring
+
+### Security
+- **Access Control**: Restrict access to the server running the scheduler
+- **Environment Variables**: Use environment variables for sensitive configurations within tasks
+- **Code Review**: Regularly review scheduled task code for security vulnerabilities
+- **Dependency Updates**: Keep all dependencies used by tasks up to date
+
+### Performance
+- **Batch Processing**: Process data in batches to reduce load
+- **Asynchronous Operations**: Offload heavy computations to queues
+- **Resource Limits**: Set resource limits for scheduler processes
+- **Profiling**: Profile long-running tasks to identify and optimize bottlenecks
+
+### Reliability
+- **Redundancy**: Run schedulers on multiple servers with `OnOneServer()` for critical tasks
+- **Error Notifications**: Configure notifications for task failures
+- **Graceful Shutdown**: Implement graceful shutdown to prevent data corruption
+- **Idempotency**: Ensure tasks can be safely re-run

@@ -1,0 +1,412 @@
+---
+alwaysApply: true
+---
+
+# Goravel ORM Enforcement
+
+**CRITICAL**: Always use Goravel's ORM instead of raw database queries for all database operations.
+
+## ORM Usage Requirements
+
+### Mandatory ORM Usage
+- **ALWAYS** use `facades.Orm().Query()` for all database operations
+- **NEVER** use raw SQL queries directly
+- **NEVER** use database drivers directly (mysql, postgres, sqlite)
+- **ALWAYS** use ORM methods for data manipulation
+
+### Prohibited Patterns
+```go
+// ❌ FORBIDDEN - Raw database queries
+db, _ := sql.Open("mysql", "connection_string")
+rows, _ := db.Query("SELECT * FROM users")
+db.Exec("INSERT INTO users (name) VALUES (?)", "John")
+
+// ❌ FORBIDDEN - Direct database driver usage
+mysql.Connect("connection_string")
+postgres.Connect("connection_string")
+sqlite.Connect("connection_string")
+
+// ❌ FORBIDDEN - Raw SQL execution
+facades.DB().Raw("SELECT * FROM users")
+facades.DB().Exec("INSERT INTO users (name) VALUES (?)", "John")
+```
+
+### Required ORM Patterns
+```go
+// ✅ REQUIRED - Use ORM for all database operations
+var users []models.User
+facades.Orm().Query().Find(&users)
+
+var user models.User
+facades.Orm().Query().Where("id", 1).First(&user)
+
+facades.Orm().Query().Create(&models.User{Name: "John"})
+facades.Orm().Query().Where("id", 1).Update(&models.User{Name: "Jane"})
+facades.Orm().Query().Where("id", 1).Delete(&models.User{})
+```
+
+## ORM Query Operations
+
+### Basic Queries
+```go
+// ✅ Find all records
+var users []models.User
+facades.Orm().Query().Find(&users)
+
+// ✅ Find single record
+var user models.User
+facades.Orm().Query().Where("id", 1).First(&user)
+
+// ✅ Find with conditions
+var activeUsers []models.User
+facades.Orm().Query().Where("is_active", true).Find(&activeUsers)
+```
+
+### Create Operations
+```go
+// ✅ Create single record
+user := models.User{Name: "John", Email: "john@example.com"}
+facades.Orm().Query().Create(&user)
+
+// ✅ Create multiple records
+users := []models.User{
+    {Name: "John", Email: "john@example.com"},
+    {Name: "Jane", Email: "jane@example.com"},
+}
+facades.Orm().Query().Create(&users)
+```
+
+### Update Operations
+```go
+// ✅ Update single record
+var user models.User
+facades.Orm().Query().Where("id", 1).First(&user)
+user.Name = "Updated Name"
+facades.Orm().Query().Save(&user)
+
+// ✅ Update with conditions
+facades.Orm().Query().Where("is_active", false).Update(&models.User{Name: "Inactive User"})
+```
+
+### Delete Operations
+```go
+// ✅ Delete single record
+var user models.User
+facades.Orm().Query().Where("id", 1).First(&user)
+facades.Orm().Query().Delete(&user)
+
+// ✅ Delete with conditions
+facades.Orm().Query().Where("is_active", false).Delete(&models.User{})
+```
+
+### Complex Queries
+```go
+// ✅ Complex WHERE conditions
+var users []models.User
+facades.Orm().Query().
+    Where("age > ?", 18).
+    Where("is_active", true).
+    Where("created_at > ?", time.Now().AddDate(0, -1, 0)).
+    Find(&users)
+
+// ✅ Ordering and limiting
+var recentUsers []models.User
+facades.Orm().Query().
+    Order("created_at DESC").
+    Limit(10).
+    Find(&recentUsers)
+
+// ✅ Joins and relationships
+var posts []models.Post
+facades.Orm().Query().
+    Joins("User").
+    Where("users.is_active", true).
+    Find(&posts)
+```
+
+## ORM Relationships
+
+### One-to-One Relationships
+```go
+// ✅ Load one-to-one relationships
+var user models.User
+facades.Orm().Query().With("Profile").First(&user)
+
+// ✅ Create with relationships
+user := models.User{
+    Name: "John",
+    Profile: &models.Profile{Bio: "Software Developer"},
+}
+facades.Orm().Query().Create(&user)
+```
+
+### One-to-Many Relationships
+```go
+// ✅ Load one-to-many relationships
+var user models.User
+facades.Orm().Query().With("Posts").First(&user)
+
+// ✅ Create with relationships
+user := models.User{
+    Name: "John",
+    Posts: []*models.Post{
+        {Title: "First Post", Content: "Content here"},
+        {Title: "Second Post", Content: "More content"},
+    },
+}
+facades.Orm().Query().Create(&user)
+```
+
+### Many-to-Many Relationships
+```go
+// ✅ Load many-to-many relationships
+var user models.User
+facades.Orm().Query().With("Roles").First(&user)
+
+// ✅ Associate many-to-many relationships
+var user models.User
+var role models.Role
+facades.Orm().Query().First(&user)
+facades.Orm().Query().First(&role)
+facades.Orm().Query().Model(&user).Association("Roles").Append(&role)
+```
+
+## ORM Transactions
+
+### Transaction Usage
+```go
+// ✅ Use ORM transactions
+err := facades.Orm().Transaction(func(tx orm.Query) error {
+    // Create user
+    user := models.User{Name: "John"}
+    if err := tx.Create(&user); err != nil {
+        return err
+    }
+    
+    // Create profile
+    profile := models.Profile{UserID: user.ID, Bio: "Developer"}
+    if err := tx.Create(&profile); err != nil {
+        return err
+    }
+    
+    return nil
+})
+```
+
+## ORM Scopes and Filters
+
+### Global Scopes
+```go
+// ✅ Use global scopes in models
+type User struct {
+    orm.Model
+    Name     string
+    IsActive bool
+}
+
+func (u *User) GlobalScopes() []func(orm.Query) orm.Query {
+    return []func(orm.Query) orm.Query{
+        func(query orm.Query) orm.Query {
+            return query.Where("is_active", true)
+        },
+    }
+}
+```
+
+### Query Scopes
+```go
+// ✅ Use query scopes
+var activeUsers []models.User
+facades.Orm().Query().Where("is_active", true).Find(&activeUsers)
+
+var recentUsers []models.User
+facades.Orm().Query().
+    Where("created_at > ?", time.Now().AddDate(0, -1, 0)).
+    Find(&recentUsers)
+```
+
+## ORM Events and Hooks
+
+### Model Events
+```go
+// ✅ Use ORM model events
+type User struct {
+    orm.Model
+    Name  string
+    Email string
+}
+
+func (u *User) DispatchesEvents() map[contractsorm.EventType]func(contractsorm.Event) error {
+    return map[contractsorm.EventType]func(contractsorm.Event) error{
+        contractsorm.EventCreating: func(event contractsorm.Event) error {
+            // Hash password before creating
+            return nil
+        },
+        contractsorm.EventUpdating: func(event contractsorm.Event) error {
+            // Update timestamp
+            return nil
+        },
+    }
+}
+```
+
+## ORM Performance Optimization
+
+### Eager Loading
+```go
+// ✅ Use eager loading to prevent N+1 queries
+var users []models.User
+facades.Orm().Query().With("Posts", "Profile").Find(&users)
+
+// ✅ Load specific relationships
+var posts []models.Post
+facades.Orm().Query().With("User").Find(&posts)
+```
+
+### Query Optimization
+```go
+// ✅ Use select to limit fields
+var users []models.User
+facades.Orm().Query().Select("id", "name", "email").Find(&users)
+
+// ✅ Use pagination
+var users []models.User
+facades.Orm().Query().Paginate(1, 10, &users)
+```
+
+## ORM Error Handling
+
+### Proper Error Handling
+```go
+// ✅ Handle ORM errors properly
+var user models.User
+err := facades.Orm().Query().Where("id", 1).First(&user)
+if err != nil {
+    if errors.Is(err, gorm.ErrRecordNotFound) {
+        // Handle not found
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    // Handle other errors
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Database error",
+    })
+}
+```
+
+## ORM Testing
+
+### Testing with ORM
+```go
+// ✅ Use ORM in tests
+func TestUserCreation(t *testing.T) {
+    user := models.User{Name: "Test User", Email: "test@example.com"}
+    err := facades.Orm().Query().Create(&user)
+    assert.NoError(t, err)
+    assert.NotZero(t, user.ID)
+}
+
+func TestUserQuery(t *testing.T) {
+    // Create test user
+    user := models.User{Name: "Test User", Email: "test@example.com"}
+    facades.Orm().Query().Create(&user)
+    
+    // Query user
+    var foundUser models.User
+    err := facades.Orm().Query().Where("email", "test@example.com").First(&foundUser)
+    assert.NoError(t, err)
+    assert.Equal(t, "Test User", foundUser.Name)
+}
+```
+
+## Migration to ORM
+
+### Converting Raw Queries
+```go
+// ❌ BEFORE - Raw SQL
+rows, err := db.Query("SELECT * FROM users WHERE age > ? AND is_active = ?", 18, true)
+
+// ✅ AFTER - ORM
+var users []models.User
+err := facades.Orm().Query().Where("age > ? AND is_active = ?", 18, true).Find(&users)
+```
+
+### Converting Raw Inserts
+```go
+// ❌ BEFORE - Raw SQL
+result, err := db.Exec("INSERT INTO users (name, email) VALUES (?, ?)", "John", "john@example.com")
+
+// ✅ AFTER - ORM
+user := models.User{Name: "John", Email: "john@example.com"}
+err := facades.Orm().Query().Create(&user)
+```
+
+### Converting Raw Updates
+```go
+// ❌ BEFORE - Raw SQL
+result, err := db.Exec("UPDATE users SET name = ? WHERE id = ?", "Jane", 1)
+
+// ✅ AFTER - ORM
+var user models.User
+facades.Orm().Query().Where("id", 1).First(&user)
+user.Name = "Jane"
+err := facades.Orm().Query().Save(&user)
+```
+
+## Enforcement Guidelines
+
+### Code Review Checklist
+- [ ] All database operations use `facades.Orm().Query()`
+- [ ] No raw SQL queries are present
+- [ ] No direct database driver usage
+- [ ] All relationships use ORM methods
+- [ ] Transactions use ORM transaction methods
+- [ ] Error handling follows ORM patterns
+
+### Development Rules
+1. **NEVER** import database drivers directly
+2. **ALWAYS** use ORM facades for database operations
+3. **ALWAYS** use ORM relationships for data associations
+4. **ALWAYS** use ORM transactions for data consistency
+5. **ALWAYS** use ORM events for data hooks
+6. **ALWAYS** use ORM scopes for query filtering
+
+### Performance Benefits
+- **Query Optimization**: ORM automatically optimizes queries
+- **Relationship Loading**: Prevents N+1 query problems
+- **Connection Pooling**: Automatic connection management
+- **Caching**: Built-in query caching
+- **Security**: Protection against SQL injection
+
+### Security Benefits
+- **SQL Injection Prevention**: ORM prevents SQL injection attacks
+- **Input Validation**: Automatic input sanitization
+- **Access Control**: Built-in access control mechanisms
+- **Audit Logging**: Automatic audit trail generation
+
+## Best Practices
+
+### ORM Design
+- **Model-First**: Design models before database operations
+- **Relationship Mapping**: Properly map all relationships
+- **Event Handling**: Use model events for business logic
+- **Scope Usage**: Use scopes for common query patterns
+
+### Performance
+- **Eager Loading**: Always use eager loading for relationships
+- **Query Optimization**: Use select to limit fields
+- **Pagination**: Use pagination for large datasets
+- **Caching**: Leverage ORM caching features
+
+### Security
+- **Input Validation**: Validate all inputs through ORM
+- **Access Control**: Use ORM access control features
+- **Audit Logging**: Enable ORM audit logging
+- **Data Encryption**: Use ORM encryption features
+
+### Reliability
+- **Error Handling**: Handle all ORM errors gracefully
+- **Transaction Management**: Use transactions for data consistency
+- **Testing**: Test all ORM operations thoroughly
+- **Monitoring**: Monitor ORM performance and errors

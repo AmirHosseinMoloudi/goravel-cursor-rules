@@ -1,0 +1,744 @@
+---
+alwaysApply: true
+---
+
+# Goravel Helpers System
+
+Based on the [official Goravel helpers documentation](https://www.goravel.dev/digging-deeper/helpers.html).
+
+## Helpers Overview
+
+### Introduction
+- **Utility Functions**: Goravel provides a comprehensive set of helper functions for common operations
+- **Framework Integration**: Seamlessly integrated with Goravel's core functionality
+- **Multiple Categories**: Paths, Carbon (date/time), Debug, Maps, Convert, and Collect helpers
+- **Easy Usage**: Simple import and usage patterns for enhanced productivity
+
+### Key Concepts
+- **Helper Packages**: Access helper functionality through specific package imports
+- **Utility Functions**: Common operations made simple and efficient
+- **Framework Integration**: Tightly integrated with Goravel's core systems
+- **Productivity**: Enhance development speed with utility functions
+
+## Path Helpers
+
+### Path Package Overview
+```go
+import "github.com/goravel/framework/support/path"
+```
+
+### Application Paths
+```go
+// Get application directory path
+appPath := path.App()
+// Returns: /path/to/project/app
+
+// Get specific file within app directory
+controllerPath := path.App("http/controllers/UserController.go")
+// Returns: /path/to/project/app/http/controllers/UserController.go
+```
+
+### Base Directory Paths
+```go
+// Get project root directory
+basePath := path.Base()
+// Returns: /path/to/project
+
+// Get specific file within project root
+vendorPath := path.Base("vendor/bin")
+// Returns: /path/to/project/vendor/bin
+```
+
+### Configuration Paths
+```go
+// Get configuration directory
+configPath := path.Config()
+// Returns: /path/to/project/config
+
+// Get specific config file
+appConfigPath := path.Config("app.go")
+// Returns: /path/to/project/config/app.go
+```
+
+### Database Paths
+```go
+// Get database directory
+databasePath := path.Database()
+// Returns: /path/to/project/database
+
+// Get specific database file
+factoryPath := path.Database("factories/user_factory.go")
+// Returns: /path/to/project/database/factories/user_factory.go
+```
+
+### Storage Paths
+```go
+// Get storage directory
+storagePath := path.Storage()
+// Returns: /path/to/project/storage
+
+// Get specific storage file
+filePath := path.Storage("app/file.txt")
+// Returns: /path/to/project/storage/app/file.txt
+```
+
+### Public Paths
+```go
+// Get public directory
+publicPath := path.Public()
+// Returns: /path/to/project/public
+
+// Get specific public file
+cssPath := path.Public("css/app.css")
+// Returns: /path/to/project/public/css/app.css
+```
+
+### Language Paths
+```go
+// Get language directory
+langPath := path.Lang()
+// Returns: /path/to/project/lang
+
+// Get specific language file
+enLangPath := path.Lang("en.json")
+// Returns: /path/to/project/lang/en.json
+```
+
+### Resource Paths
+```go
+// Get resource directory
+resourcePath := path.Resource()
+// Returns: /path/to/project/resources
+
+// Get specific resource file
+cssResourcePath := path.Resource("css/app.css")
+// Returns: /path/to/project/resources/css/app.css
+```
+
+## Carbon Date/Time Helpers
+
+### Carbon Package Overview
+```go
+import "github.com/goravel/framework/support/carbon"
+```
+
+### Current Time Operations
+```go
+// Get current time
+now := carbon.Now()
+
+// Set timezone
+carbon.SetTimezone(carbon.UTC)
+
+// Set locale
+carbon.SetLocale("en")
+```
+
+### Testing with Carbon
+```go
+// Set test time
+carbon.SetTestNow(carbon.Now())
+
+// Clear test time
+carbon.CleanTestNow()
+
+// Check if using test time
+isTest := carbon.IsTestNow()
+```
+
+### Parsing Dates
+```go
+// Parse date string
+date := carbon.Parse("2020-08-05 13:14:15")
+
+// Parse with layout
+date := carbon.ParseByLayout("2020-08-05 13:14:15", carbon.DateTimeLayout)
+
+// Parse with multiple layouts
+date := carbon.ParseByLayout("2020|08|05 13|14|15", []string{
+    "2006|01|02 15|04|05", 
+    "2006|1|2 3|4|5",
+})
+
+// Parse with format
+date := carbon.ParseByFormat("2020-08-05 13:14:15", carbon.DateTimeFormat)
+
+// Parse with multiple formats
+date := carbon.ParseByFormat("2020|08|05 13|14|15", []string{
+    "Y|m|d H|i|s", 
+    "y|m|d h|i|s",
+})
+```
+
+### Timestamp Operations
+```go
+// From timestamp (seconds)
+date := carbon.FromTimestamp(1577836800)
+
+// From timestamp (milliseconds)
+date := carbon.FromTimestampMilli(1649735755999)
+
+// From timestamp (microseconds)
+date := carbon.FromTimestampMicro(1649735755999999)
+
+// From timestamp (nanoseconds)
+date := carbon.FromTimestampNano(1649735755999999999)
+```
+
+### DateTime Operations
+```go
+// From date and time
+date := carbon.FromDateTime(2020, 1, 1, 0, 0, 0)
+
+// From date and time with milliseconds
+date := carbon.FromDateTimeMilli(2020, 1, 1, 0, 0, 0, 999)
+
+// From date and time with microseconds
+date := carbon.FromDateTimeMicro(2020, 1, 1, 0, 0, 0, 999999)
+
+// From date and time with nanoseconds
+date := carbon.FromDateTimeNano(2020, 1, 1, 0, 0, 0, 999999999)
+```
+
+### Date Operations
+```go
+// From date only
+date := carbon.FromDate(2020, 1, 1)
+
+// From date with milliseconds
+date := carbon.FromDateMilli(2020, 1, 1, 999)
+
+// From date with microseconds
+date := carbon.FromDateMicro(2020, 1, 1, 999999)
+
+// From date with nanoseconds
+date := carbon.FromDateNano(2020, 1, 1, 999999999)
+```
+
+### Time Operations
+```go
+// From time only
+time := carbon.FromTime(13, 14, 15)
+
+// From time with milliseconds
+time := carbon.FromTimeMilli(13, 14, 15, 999)
+
+// From time with microseconds
+time := carbon.FromTimeMicro(13, 14, 15, 999999)
+
+// From time with nanoseconds
+time := carbon.FromTimeNano(13, 14, 15, 999999999)
+
+// From standard Go time
+time := carbon.FromStdTime(time.Now())
+```
+
+## Debug Helpers
+
+### Debug Package Overview
+```go
+import "github.com/goravel/framework/support/debug"
+```
+
+### Debug Output Methods
+```go
+// Print variables to console
+debug.Dump(myVar1, myVar2, myVar3)
+
+// Print variables to io.Writer
+debug.FDump(someWriter, myVar1, myVar2, myVar3)
+
+// Print variables to string
+result := debug.SDump(myVar1, myVar2, myVar3)
+```
+
+### Debug Usage Examples
+```go
+// Debug user data
+user := User{ID: 1, Name: "John", Email: "john@example.com"}
+debug.Dump(user)
+
+// Debug multiple variables
+debug.Dump("Processing user:", user, "Timestamp:", time.Now())
+
+// Debug to file
+file, _ := os.Create("debug.log")
+debug.FDump(file, user, config)
+file.Close()
+
+// Debug to string for logging
+debugInfo := debug.SDump(user, config)
+facades.Log().Info("Debug info: " + debugInfo)
+```
+
+## Map Helpers
+
+### Maps Package Overview
+```go
+import "github.com/goravel/framework/support/maps"
+```
+
+### Map Operations
+```go
+// Add key-value pair if key doesn't exist
+mp := map[string]any{"name": "Krishan"}
+maps.Add(mp, "age", 22)
+// Result: map[string]any{"name": "Krishan", "age": 22}
+
+// Add to empty map
+mp2 := map[string]string{}
+maps.Add(mp2, "name", "Bowen")
+maps.Add(mp2, "name", "Krishan") // Won't overwrite existing key
+// Result: map[string]string{"name": "Bowen"}
+```
+
+### Map Existence Checks
+```go
+mp := map[string]any{"name": "Krishan", "age": 22}
+
+// Check if key exists
+exists := maps.Exists(mp, "name") // true
+exists = maps.Exists(mp, "email") // false
+
+// Check if all keys exist
+hasAll := maps.Has(mp, "name", "age") // true
+hasAll = maps.Has(mp, "name", "email") // false
+
+// Check if any key exists
+hasAny := maps.HasAny(mp, "name", "email") // true
+hasAny = maps.HasAny(mp, "email", "phone") // false
+```
+
+### Map Retrieval Operations
+```go
+mp := map[string]any{"name": "Bowen"}
+
+// Get value with default
+name := maps.Get(mp, "name", "Krishan") // "Bowen"
+age := maps.Get(mp, "age", 22) // 22
+
+// Get only specific keys
+filtered := maps.Only(mp, "name")
+// Result: map[string]any{"name": "Bowen"}
+
+filtered = maps.Only(mp, "name", "age")
+// Result: map[string]any{"name": "Bowen"}
+```
+
+### Map Modification Operations
+```go
+mp := map[string]any{"name": "Goravel", "language": "Go"}
+
+// Set key-value pair
+maps.Set(mp, "version", "1.0")
+
+// Remove keys
+maps.Forget(mp, "name", "age")
+
+// Pull (get and remove) key
+value := maps.Pull(mp, "name")
+// Result: "Goravel", mp now contains: map[string]any{"language": "Go"}
+
+// Pull with default value
+value = maps.Pull(mp, "age", "default")
+// Result: "default" (key doesn't exist)
+```
+
+### Map Filtering
+```go
+mp := map[string]string{"name": "Goravel", "language": "Go"}
+
+// Filter map using callback
+filtered := maps.Where(mp, func(key string, value string) bool {
+    return key == "name"
+})
+// Result: map[string]string{"name": "Goravel"}
+```
+
+## Convert Helpers
+
+### Convert Package Overview
+```go
+import "github.com/goravel/framework/support/convert"
+```
+
+### Tap Operations
+```go
+// Tap with side effects
+result := convert.Tap("Goravel", func(value string) {
+    fmt.Println(value + " Framework")
+})
+// Prints: "Goravel Framework"
+// Returns: "Goravel"
+
+// Tap with map modification
+mp := map[string]string{"name": "Goravel"}
+result := convert.Tap(mp, func(value map[string]string) {
+    mp["language"] = "Go"
+})
+// Result: map[string]string{"name": "Goravel", "language": "Go"}
+```
+
+### Transform Operations
+```go
+// Transform value using callback
+result := convert.Transform(1, strconv.Itoa)
+// Result: "1"
+
+// Transform to custom type
+type Foo struct {
+    Name string
+}
+
+result := convert.Transform("foo", func(s string) *Foo {
+    return &Foo{Name: s}
+})
+// Result: &Foo{Name: "foo"}
+```
+
+### With Operations
+```go
+// Execute callback with value and return result
+result := convert.With("Goravel", func(value string) string {
+    return value + " Framework"
+})
+// Result: "Goravel Framework"
+```
+
+### Default Operations
+```go
+// Return first non-zero value
+result := convert.Default("", "foo") // "foo"
+result = convert.Default("bar", "foo") // "bar"
+result = convert.Default(0, 1) // 1
+```
+
+### Pointer Operations
+```go
+// Convert value to pointer
+strPtr := convert.Pointer("foo") // *string("foo")
+intPtr := convert.Pointer(1) // *int(1)
+```
+
+## Collect Helpers
+
+### Collect Package Overview
+```go
+import "github.com/goravel/framework/support/collect"
+```
+
+### Collection Counting
+```go
+// Count items in collection
+count := collect.Count([]string{"Goravel", "Framework"}) // 2
+
+// Count items matching predicate
+count := collect.CountBy([]string{"Goravel", "Framework"}, func(value string) bool {
+    return strings.Contains(value, "Goravel")
+}) // 1
+```
+
+### Collection Iteration
+```go
+// Iterate over collection
+collect.Each([]string{"Goravel", "Framework"}, func(value string, index int) {
+    fmt.Println(index + 1, value)
+})
+// Output:
+// 1 Goravel
+// 2 Framework
+```
+
+### Collection Filtering
+```go
+// Filter collection using predicate
+filtered := collect.Filter([]string{"Goravel", "Framework"}, func(value string) bool {
+    return strings.Contains(value, "Goravel")
+})
+// Result: []string{"Goravel"}
+```
+
+### Collection Grouping
+```go
+// Group collection by key
+grouped := collect.GroupBy([]map[string]string{
+    {"class": "1", "Name": "Rohan"},
+    {"class": "2", "Name": "Bowen"},
+    {"class": "2", "Name": "Krishan"},
+}, func(value map[string]string) string {
+    return value["class"]
+})
+// Result: map[string][]map[string]string{
+//     "1": []map[string]string{{"class": "1", "Name": "Rohan"}},
+//     "2": []map[string]string{{"class": "2", "Name": "Bowen"}, {"class": "2", "Name": "Krishan"}},
+// }
+```
+
+### Collection Keys and Values
+```go
+// Get all keys from map
+keys := collect.Keys(map[string]string{"name": "Goravel", "language": "Go"})
+// Result: []string{"name", "language"}
+
+// Get all values from map
+values := collect.Values(map[string]string{"name": "Goravel", "language": "Go"})
+// Result: []string{"Goravel", "Go"}
+```
+
+### Collection Transformation
+```go
+// Transform collection using callback
+transformed := collect.Map([]string{"Goravel", "Framework"}, func(value string, _ int) string {
+    return strings.ToUpper(value)
+})
+// Result: []string{"GORAVEL", "FRAMEWORK"}
+```
+
+### Collection Aggregation
+```go
+// Get maximum value
+max := collect.Max([]int{1, 2, 3, 4, 5}) // 5
+
+// Get minimum value
+min := collect.Min([]int{1, 2, 3, 4, 5}) // 1
+
+// Get sum of values
+sum := collect.Sum([]int{1, 2, 3, 4, 5}) // 15
+```
+
+### Collection Manipulation
+```go
+// Reverse collection
+reversed := collect.Reverse([]string{"Goravel", "Framework"})
+// Result: []string{"Framework", "Goravel"}
+
+// Shuffle collection
+shuffled := collect.Shuffle([]int{1, 2, 3, 4, 5})
+// Result: []int{3, 1, 5, 2, 4} (example)
+
+// Split collection into chunks
+chunks := collect.Split([]int{1, 2, 3, 4, 5}, 2)
+// Result: [][]int{{1, 2}, {3, 4}, {5}}
+
+// Get unique values
+unique := collect.Unique([]string{"Goravel", "Framework", "Goravel"})
+// Result: []string{"Goravel", "Framework"}
+```
+
+### Collection Merging
+```go
+// Merge maps
+merged := collect.Merge(
+    map[string]string{"name": "Goravel"}, 
+    map[string]string{"language": "Go"}
+)
+// Result: map[string]string{"name": "Goravel", "language": "Go"}
+
+// Merge with key conflicts (later values win)
+merged := collect.Merge(
+    map[string]string{"name": "Goravel"}, 
+    map[string]string{"name": "Framework"}
+)
+// Result: map[string]string{"name": "Framework"}
+```
+
+## Advanced Helper Patterns
+
+### Path Management
+```go
+// Dynamic path building
+func getControllerPath(controller string) string {
+    return path.App("http/controllers/" + controller + ".go")
+}
+
+// Resource path management
+func getResourcePath(category, filename string) string {
+    return path.Resource(category + "/" + filename)
+}
+```
+
+### Date/Time Processing
+```go
+// Date range processing
+func processDateRange(start, end string) []carbon.Carbon {
+    startDate := carbon.Parse(start)
+    endDate := carbon.Parse(end)
+    
+    var dates []carbon.Carbon
+    for current := startDate; current.Lte(endDate); current = current.AddDay() {
+        dates = append(dates, current)
+    }
+    
+    return dates
+}
+
+// Timezone conversion
+func convertTimezone(date carbon.Carbon, tz string) carbon.Carbon {
+    return date.SetTimezone(tz)
+}
+```
+
+### Debug Integration
+```go
+// Debug with context
+func debugWithContext(ctx http.Context, data interface{}) {
+    debug.Dump("Request ID:", ctx.Request().Header("X-Request-ID"))
+    debug.Dump("User ID:", ctx.Request().Header("X-User-ID"))
+    debug.Dump("Data:", data)
+}
+
+// Debug to log
+func debugToLog(data interface{}) {
+    debugInfo := debug.SDump(data)
+    facades.Log().Debug("Debug info: " + debugInfo)
+}
+```
+
+### Map Processing
+```go
+// Map validation
+func validateMap(mp map[string]any, requiredKeys []string) error {
+    for _, key := range requiredKeys {
+        if !maps.Exists(mp, key) {
+            return fmt.Errorf("missing required key: %s", key)
+        }
+    }
+    return nil
+}
+
+// Map transformation
+func transformMap(mp map[string]any, transformer func(string, any) any) map[string]any {
+    result := make(map[string]any)
+    for key, value := range mp {
+        result[key] = transformer(key, value)
+    }
+    return result
+}
+```
+
+### Collection Processing
+```go
+// Pagination helper
+func paginateCollection(items []interface{}, page, limit int) ([]interface{}, int) {
+    total := collect.Count(items)
+    start := (page - 1) * limit
+    end := start + limit
+    
+    if start >= total {
+        return []interface{}{}, total
+    }
+    
+    if end > total {
+        end = total
+    }
+    
+    return items[start:end], total
+}
+
+// Collection filtering with multiple criteria
+func filterCollection(items []interface{}, filters map[string]func(interface{}) bool) []interface{} {
+    return collect.Filter(items, func(item interface{}) bool {
+        for _, filter := range filters {
+            if !filter(item) {
+                return false
+            }
+        }
+        return true
+    })
+}
+```
+
+## Helper Best Practices
+
+### Design Principles
+- **Single Purpose**: Each helper should have a clear, single purpose
+- **Consistent API**: Maintain consistent function signatures and behavior
+- **Error Handling**: Handle errors gracefully and provide meaningful messages
+- **Performance**: Optimize helpers for common use cases
+
+### Performance Considerations
+- **Efficient Operations**: Use efficient algorithms for collection operations
+- **Memory Usage**: Be aware of memory usage for large collections
+- **Lazy Evaluation**: Consider lazy evaluation for expensive operations
+- **Caching**: Cache expensive computations when appropriate
+
+### Security Considerations
+- **Input Validation**: Validate all inputs to helper functions
+- **Path Security**: Secure path operations to prevent directory traversal
+- **Data Sanitization**: Sanitize data in debug operations
+- **Access Control**: Implement proper access control for sensitive operations
+
+## Development Guidelines
+
+### Helper Organization
+- **Package Structure**: Organize helpers into logical packages
+- **Function Naming**: Use clear, descriptive function names
+- **Documentation**: Document helper functions thoroughly
+- **Testing**: Test helper functions comprehensively
+
+### Testing Helpers
+```go
+// Test path helpers
+func TestPathHelpers(t *testing.T) {
+    appPath := path.App()
+    assert.NotEmpty(t, appPath)
+    assert.Contains(t, appPath, "app")
+    
+    configPath := path.Config("app.go")
+    assert.Contains(t, configPath, "config")
+    assert.Contains(t, configPath, "app.go")
+}
+
+// Test map helpers
+func TestMapHelpers(t *testing.T) {
+    mp := map[string]any{"name": "Goravel"}
+    
+    maps.Set(mp, "version", "1.0")
+    assert.Equal(t, "1.0", maps.Get(mp, "version", ""))
+    
+    assert.True(t, maps.Exists(mp, "name"))
+    assert.False(t, maps.Exists(mp, "email"))
+}
+
+// Test collection helpers
+func TestCollectionHelpers(t *testing.T) {
+    items := []int{1, 2, 3, 4, 5}
+    
+    assert.Equal(t, 5, collect.Count(items))
+    assert.Equal(t, 15, collect.Sum(items))
+    assert.Equal(t, 5, collect.Max(items))
+    assert.Equal(t, 1, collect.Min(items))
+}
+```
+
+### Monitoring and Maintenance
+- **Usage Patterns**: Monitor helper usage patterns
+- **Performance Impact**: Monitor performance impact of helpers
+- **Error Tracking**: Track helper-related errors
+- **Code Quality**: Maintain high code quality for helpers
+
+## Best Practices
+
+### Helper Design
+- **Clear Purpose**: Each helper should have a clear, single purpose
+- **Consistent API**: Maintain consistent function signatures
+- **Error Handling**: Handle errors gracefully
+- **Documentation**: Document helper functions thoroughly
+
+### Performance
+- **Efficient Algorithms**: Use efficient algorithms for operations
+- **Memory Management**: Optimize memory usage
+- **Caching**: Cache expensive operations when appropriate
+- **Monitoring**: Monitor helper performance
+
+### Security
+- **Input Validation**: Validate all inputs
+- **Path Security**: Secure path operations
+- **Data Sanitization**: Sanitize data appropriately
+- **Access Control**: Implement proper access control
+
+### Reliability
+- **Error Handling**: Handle errors gracefully
+- **Testing**: Test helpers thoroughly
+- **Documentation**: Document helper usage
+- **Monitoring**: Monitor helper health

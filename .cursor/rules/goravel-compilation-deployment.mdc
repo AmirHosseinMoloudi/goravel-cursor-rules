@@ -1,0 +1,170 @@
+---
+alwaysApply: true
+---
+
+# Goravel Compilation & Deployment Guide
+
+Based on the [official Goravel compilation documentation](https://www.goravel.dev/getting-started/compile.html).
+
+## Compilation Commands
+
+### Artisan Build Commands
+```bash
+# Select the system to compile
+go run . artisan build
+
+# Specify the system to compile
+go run . artisan build --os=linux
+go run . artisan build -o=linux
+
+# Static compilation
+go run . artisan build --static
+go run . artisan build -s
+
+# Specify the output file name
+go run . artisan build --name=goravel
+go run . artisan build -n=goravel
+```
+
+### Manual Compilation
+
+#### Regular Compilation
+```bash
+go build .
+```
+
+#### Static Compilation
+```bash
+# Statically compiled files can run without environment configuration
+go build --ldflags "-extldflags -static" -o main .
+```
+
+#### Cross Compilation
+```bash
+# Compile for Linux environment
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build .
+
+# Compile for Windows environment
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build .
+
+# Compile for Mac environment
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build .
+```
+
+## Deployment Files
+
+### Required Files for Deployment
+When deploying to server, upload these files and folders:
+```
+./main                    # Compiled binary file
+.env                     # Environment configuration
+./public/                # Public web assets
+./storage/               # Application storage
+./resources/             # Views and templates
+```
+
+## Docker Configuration
+
+### Basic Docker Build
+```bash
+docker build .
+```
+
+### Optimized Dockerfile (China Special)
+```dockerfile
+# China Special
+
+FROM golang:alpine AS builder
+ENV GO111MODULE=on \
+    CGO_ENABLED=0  \
+    GOARCH="amd64" \
+    GOOS=linux   \
+    GOPROXY=https://goproxy.cn,direct
+WORKDIR /build
+COPY . .
+RUN go mod tidy
+RUN go build --ldflags "-extldflags -static" -o main .
+FROM alpine:latest
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
+RUN apk add tzdata && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
+WORKDIR /www
+COPY --from=builder /build/main /www/
+COPY --from=builder /build/database/ /www/database/
+COPY --from=builder /build/public/ /www/public/
+COPY --from=builder /build/storage/ /www/storage/
+COPY --from/builder /build/resources/ /www/resources/
+COPY --from=builder /build/.env /www/.env
+ENTRYPOINT ["/www/main"]
+```
+
+### Docker Compose
+```bash
+# Build and start services
+docker-compose build
+docker-compose up
+```
+
+**Note**: For external access, change `APP_HOST` to `0.0.0.0`
+
+## Timezone Configuration
+
+### Method 1: Dockerfile Timezone Settings
+```dockerfile
+RUN apk add tzdata && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" > /etc/timezone
+```
+
+### Method 2: Compilation Timezone
+```bash
+go build -tags timetzdata .
+```
+
+### Method 3: Import Timezone in main.go
+```go
+import (
+    _ "time/tzdata"
+)
+```
+
+## Package Size Optimization
+
+### Reduce Package Size
+- Comment out unused `ServiceProvider` in [config/app.go](mdc:config/app.go)::providers
+- Remove unused dependencies from [go.mod](mdc:go.mod)
+- Use static compilation for smaller binaries
+- Optimize Docker images with multi-stage builds
+
+## Best Practices
+
+### Compilation Best Practices
+- Use static compilation for production deployments
+- Cross-compile for target platforms
+- Optimize build flags for performance
+- Use appropriate CGO settings
+
+### Docker Best Practices
+- Use multi-stage builds for smaller images
+- Use Alpine Linux for security and size
+- Implement proper layer caching
+- Use .dockerignore to exclude unnecessary files
+
+### Deployment Best Practices
+- Use environment-specific configurations
+- Implement proper health checks
+- Use reverse proxies for production
+- Monitor application performance
+- Implement proper logging
+
+### Security Considerations
+- Never expose sensitive files in Docker images
+- Use proper file permissions
+- Implement proper secret management
+- Use secure base images
+- Scan images for vulnerabilities
+
+## Development Workflow
+- Use `artisan build` for development builds
+- Use static compilation for production
+- Test Docker builds locally before deployment
+- Use Docker Compose for local development
+- Implement CI/CD pipelines for automated builds

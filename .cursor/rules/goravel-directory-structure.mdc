@@ -1,0 +1,145 @@
+---
+alwaysApply: true
+---
+
+# Goravel Directory Structure Guide
+
+Based on the [official Goravel directory structure documentation](https://www.goravel.dev/getting-started/directory-structure.html).
+
+## Root Directory Structure
+
+### Core Application Directories
+
+#### [app/](mdc:app/) - Core Application Logic
+- Contains the core code of the program
+- Almost all application logic resides in this folder
+- Organized into subdirectories for different concerns
+
+#### [bootstrap/](mdc:bootstrap/) - Framework Startup
+- Contains the framework startup file `app.go`
+- Handles application initialization and bootstrapping
+
+#### [config/](mdc:config/) - Configuration Files
+- Contains all configuration files of the application
+- Browse through these files to familiarize with available options
+- Environment-specific configurations
+
+#### [database/](mdc:database/) - Database Operations
+- Contains database migration files
+- Database seeders and factories
+- Database-related scripts and utilities
+
+#### [public/](mdc:public/) - Static Resources
+- Contains static resources (images, certificates, etc.)
+- Web-accessible assets
+- Entry point for web requests
+
+#### [resources/](mdc:resources/) - Views and Assets
+- Contains views and templates
+- Raw, un-compiled assets (CSS, JavaScript)
+- Frontend build artifacts
+
+#### [routes/](mdc:routes/) - Route Definitions
+- Contains all route definitions of the application
+- Web routes, API routes, console routes
+- Route middleware and groups
+
+#### [storage/](mdc:storage/) - Application Storage
+- Contains the `logs` directory
+- Application log files
+- Temporary files and cache
+
+#### [tests/](mdc:tests/) - Automated Tests
+- Contains automated tests
+- Unit tests, integration tests, feature tests
+- Test utilities and helpers
+
+## App Directory Structure
+
+### [app/console/](mdc:app/console/) - Artisan Commands
+- Contains all custom Artisan commands
+- Console boot file `kernel.go`
+- Task scheduling registration
+- Custom command implementations
+
+### [app/http/](mdc:app/http/) - HTTP Layer
+- Contains controllers, middleware, etc.
+- Processes almost all web requests
+- HTTP-specific logic and handlers
+- Request/response processing
+
+### [app/grpc/](mdc:app/grpc/) - gRPC Layer
+- Contains controllers, middleware, etc.
+- Processes gRPC requests
+- gRPC-specific logic and handlers
+- Protocol buffer definitions
+
+### [app/models/](mdc:app/models/) - Data Models
+- Contains all data models
+- Database entity definitions
+- Model relationships and business logic
+- Data validation and constraints
+
+### [app/providers/](mdc:app/providers/) - Service Providers
+- Contains all Service Providers
+- Service binding and registration
+- Event registration
+- Application bootstrapping logic
+
+## Directory Organization Best Practices
+
+### File Organization
+- **Do not modify default folders** - Use the established structure
+- **Add new folders freely** - Extend the structure as needed
+- **Follow Laravel conventions** - Maintain consistency with Laravel patterns
+- **Group related functionality** - Keep related code together
+
+### Naming Conventions
+- Use descriptive directory names
+- Follow Go package naming conventions
+- Use kebab-case for multi-word directories
+- Maintain consistency across the project
+
+### Code Organization
+- **Controllers**: Place in `app/http/controllers/`
+- **Models**: Place in `app/models/`
+- **Services**: Create `app/services/` for business logic
+- **Middleware**: Place in `app/http/middleware/`
+- **Providers**: Place in `app/providers/`
+
+## Development Guidelines
+
+### Adding New Directories
+- Create new directories as needed for project requirements
+- Follow the established patterns and conventions
+- Document new directory purposes
+- Update project documentation
+
+### File Placement
+- Place files in appropriate directories based on their purpose
+- Use subdirectories for better organization
+- Group related files together
+- Maintain clear separation of concerns
+
+### Directory Structure Maintenance
+- Keep the structure clean and organized
+- Remove unused directories and files
+- Refactor when the structure becomes unwieldy
+- Document any structural changes
+
+## Framework Integration
+
+### Service Container Integration
+- Use service providers for dependency injection
+- Register services in appropriate providers
+- Follow the framework's lifecycle patterns
+
+### Configuration Integration
+- Place configuration files in [config/](mdc:config/)
+- Use environment-specific configurations
+- Follow configuration best practices
+
+### Testing Integration
+- Place tests in [tests/](mdc:tests/)
+- Follow testing directory structure
+- Use appropriate test organization patterns

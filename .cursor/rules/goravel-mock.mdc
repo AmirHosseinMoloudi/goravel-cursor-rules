@@ -1,0 +1,898 @@
+---
+alwaysApply: true
+---
+
+# Goravel Mock Testing
+
+Based on the [official Goravel mock testing documentation](https://www.goravel.dev/testing/mock.html).
+
+## Mock Testing Overview
+
+### Introduction
+- **Facade-Based Architecture**: All Goravel functions are implemented using facades
+- **Interface-Based Design**: All facades are made up of interfaces
+- **Testify Integration**: Uses stretchr/testify mock functions for exceptional testing experience
+- **Mock Factory**: Centralized mock creation through `mock.Factory()`
+
+### Key Concepts
+- **Mock Factory**: `mock.Factory()` creates mock instances for all facades
+- **Interface Mocking**: Mock any facade interface for testing
+- **Expectation Management**: Set up method expectations and verify calls
+- **Test Isolation**: Isolate units under test from dependencies
+
+## Mock Factory Pattern
+
+### Basic Mock Factory Usage
+```go
+// ✅ REQUIRED - Basic mock factory pattern
+import "github.com/goravel/framework/testing/mock"
+
+func TestWithMockFactory(t *testing.T) {
+    mockFactory := mock.Factory()
+    
+    // Create mock instances
+    mockApp := mockFactory.App()
+    mockCache := mockFactory.Cache()
+    mockConfig := mockFactory.Config()
+    
+    // Use mocks in tests
+    mockApp.On("CurrentLocale", context.Background()).Return("en").Once()
+    mockCache.On("Get", "key", "default").Return("value").Once()
+    mockConfig.On("GetString", "app.name", "default").Return("Goravel").Once()
+    
+    // Assert expectations
+    mockApp.AssertExpectations(t)
+    mockCache.AssertExpectations(t)
+    mockConfig.AssertExpectations(t)
+}
+```
+
+### Mock Factory Best Practices
+```go
+// ✅ REQUIRED - Organized mock factory usage
+type MockTestSuite struct {
+    suite.Suite
+    tests.TestCase
+    mockFactory *mock.Factory
+}
+
+func (s *MockTestSuite) SetupTest() {
+    s.mockFactory = mock.Factory()
+}
+
+func (s *MockTestSuite) TearDownTest() {
+    // Clean up mocks
+    s.mockFactory = nil
+}
+```
+
+## Mocking Core Facades
+
+### Mock facades.App
+```go
+// ✅ REQUIRED - Mock App facade
+func CurrentLocale() string {
+    return facades.App().CurrentLocale(context.Background())
+}
+
+func TestCurrentLocale(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockApp := mockFactory.App()
+    mockApp.On("CurrentLocale", context.Background()).Return("en").Once()
+
+    assert.Equal(t, "en", CurrentLocale())
+    mockApp.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock App with multiple methods
+func TestAppFacade(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockApp := mockFactory.App()
+    
+    mockApp.On("CurrentLocale", context.Background()).Return("en").Once()
+    mockApp.On("Version").Return("1.0.0").Once()
+    mockApp.On("Environment").Return("testing").Once()
+    
+    // Test multiple app methods
+    locale := facades.App().CurrentLocale(context.Background())
+    version := facades.App().Version()
+    env := facades.App().Environment()
+    
+    assert.Equal(t, "en", locale)
+    assert.Equal(t, "1.0.0", version)
+    assert.Equal(t, "testing", env)
+    
+    mockApp.AssertExpectations(t)
+}
+```
+
+### Mock facades.Artisan
+```go
+// ✅ REQUIRED - Mock Artisan facade
+import "github.com/goravel/framework/testing/mock"
+
+func ArtisanCall() {
+    facades.Artisan().Call("list")
+}
+
+func TestArtisan(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockArtisan := mockFactory.Artisan()
+    mockArtisan.On("Call", "list").Once()
+
+    assert.NotPanics(t, func() {
+        ArtisanCall()
+    })
+
+    mockArtisan.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Artisan with arguments
+func TestArtisanWithArgs(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockArtisan := mockFactory.Artisan()
+    
+    mockArtisan.On("Call", "migrate", "--force").Return(nil).Once()
+    mockArtisan.On("Call", "db:seed").Return(nil).Once()
+    
+    err1 := facades.Artisan().Call("migrate", "--force")
+    err2 := facades.Artisan().Call("db:seed")
+    
+    assert.Nil(t, err1)
+    assert.Nil(t, err2)
+    
+    mockArtisan.AssertExpectations(t)
+}
+```
+
+### Mock facades.Auth
+```go
+// ✅ REQUIRED - Mock Auth facade
+import (
+    "testing"
+    "github.com/goravel/framework/http"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/stretchr/testify/assert"
+    "github.com/goravel/framework/facades"
+)
+
+func Auth() error {
+    return facades.Auth().Logout(http.Background())
+}
+
+func TestAuth(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockAuth := mockFactory.Auth()
+    mockAuth.On("Logout", http.Background()).Return(nil).Once()
+    
+    err := Auth()
+    assert.Nil(t, err)
+    mockAuth.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Auth with user operations
+func TestAuthUserOperations(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockAuth := mockFactory.Auth()
+    
+    user := &models.User{ID: 1, Name: "John"}
+    mockAuth.On("Login", user).Return("token123", nil).Once()
+    mockAuth.On("Parse", "token123").Return(&auth.Payload{Key: "1"}, nil).Once()
+    mockAuth.On("User", mock.Anything).Return(nil).Once()
+    mockAuth.On("Logout").Return(nil).Once()
+    
+    // Test auth operations
+    token, err := facades.Auth().Login(user)
+    assert.NoError(t, err)
+    assert.Equal(t, "token123", token)
+    
+    payload, err := facades.Auth().Parse(token)
+    assert.NoError(t, err)
+    assert.Equal(t, "1", payload.Key)
+    
+    var retrievedUser models.User
+    err = facades.Auth().User(&retrievedUser)
+    assert.NoError(t, err)
+    
+    err = facades.Auth().Logout()
+    assert.NoError(t, err)
+    
+    mockAuth.AssertExpectations(t)
+}
+```
+
+### Mock facades.Cache
+```go
+// ✅ REQUIRED - Mock Cache facade
+import "github.com/goravel/framework/testing/mock"
+
+func Cache() string {
+    if err := facades.Cache().Put("name", "goravel", 1*time.Minute); err != nil {
+        fmt.Println("cache.put.error", err)
+    }
+    return facades.Cache().Get("name", "test").(string)
+}
+
+func TestCache(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+
+    mockCache.On("Put", "name", "goravel", mock.Anything).Return(nil).Once()
+    mockCache.On("Get", "name", "test").Return("Goravel").Once()
+
+    res := Cache()
+    assert.Equal(t, "Goravel", res)
+    mockCache.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Cache with complex operations
+func TestCacheComplexOperations(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+    
+    // Mock cache operations
+    mockCache.On("Put", "key1", "value1", 5*time.Minute).Return(nil).Once()
+    mockCache.On("Get", "key1", "default").Return("value1").Once()
+    mockCache.On("Has", "key1").Return(true).Once()
+    mockCache.On("Forget", "key1").Return(true).Once()
+    mockCache.On("Flush").Return(true).Once()
+    
+    // Test cache operations
+    err := facades.Cache().Put("key1", "value1", 5*time.Minute)
+    assert.NoError(t, err)
+    
+    value := facades.Cache().Get("key1", "default")
+    assert.Equal(t, "value1", value)
+    
+    exists := facades.Cache().Has("key1")
+    assert.True(t, exists)
+    
+    deleted := facades.Cache().Forget("key1")
+    assert.True(t, deleted)
+    
+    flushed := facades.Cache().Flush()
+    assert.True(t, flushed)
+    
+    mockCache.AssertExpectations(t)
+}
+```
+
+### Mock facades.Config
+```go
+// ✅ REQUIRED - Mock Config facade
+import "github.com/goravel/framework/testing/mock"
+
+func Config() string {
+    return facades.Config().GetString("app.name", "test")
+}
+
+func TestConfig(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockConfig := mockFactory.Config()
+    mockConfig.On("GetString", "app.name", "test").Return("Goravel").Once()
+
+    res := Config()
+    assert.Equal(t, "Goravel", res)
+    mockConfig.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Config with multiple types
+func TestConfigMultipleTypes(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockConfig := mockFactory.Config()
+    
+    mockConfig.On("GetString", "app.name", "").Return("Goravel").Once()
+    mockConfig.On("GetInt", "app.port", 8080).Return(3000).Once()
+    mockConfig.On("GetBool", "app.debug", false).Return(true).Once()
+    mockConfig.On("GetFloat64", "app.version", 1.0).Return(1.5).Once()
+    
+    name := facades.Config().GetString("app.name", "")
+    port := facades.Config().GetInt("app.port", 8080)
+    debug := facades.Config().GetBool("app.debug", false)
+    version := facades.Config().GetFloat64("app.version", 1.0)
+    
+    assert.Equal(t, "Goravel", name)
+    assert.Equal(t, 3000, port)
+    assert.True(t, debug)
+    assert.Equal(t, 1.5, version)
+    
+    mockConfig.AssertExpectations(t)
+}
+```
+
+## Mocking Security Facades
+
+### Mock facades.Crypt
+```go
+// ✅ REQUIRED - Mock Crypt facade
+import (
+    "testing"
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/stretchr/testify/assert"
+)
+
+func Crypt(str string) (string, error) {
+    res, err := facades.Crypt().EncryptString(str)
+    if err != nil {
+        return "", err
+    }
+    return facades.Crypt().DecryptString(res)
+}
+
+func TestCrypt(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCrypt := mockFactory.Crypt()
+    mockCrypt.On("EncryptString", "Goravel").Return("encrypted", nil).Once()
+    mockCrypt.On("DecryptString", "encrypted").Return("Goravel", nil).Once()
+
+    res, err := Crypt("Goravel")
+    assert.Equal(t, "Goravel", res)
+    assert.Nil(t, err)
+    mockCrypt.AssertExpectations(t)
+}
+```
+
+### Mock facades.Hash
+```go
+// ✅ REQUIRED - Mock Hash facade
+func Hash() (string, error) {
+    return facades.Hash().Make("Goravel")
+}
+
+func TestHash(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockHash := mockFactory.Hash()
+    mockHash.On("Make", "Goravel").Return("hashed", nil).Once()
+
+    res, err := Hash()
+    assert.Equal(t, "hashed", res)
+    assert.Nil(t, err)
+    mockHash.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Hash with verification
+func TestHashVerification(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockHash := mockFactory.Hash()
+    
+    mockHash.On("Make", "password").Return("hashed_password", nil).Once()
+    mockHash.On("Check", "password", "hashed_password").Return(true).Once()
+    
+    hashed, err := facades.Hash().Make("password")
+    assert.NoError(t, err)
+    assert.Equal(t, "hashed_password", hashed)
+    
+    isValid := facades.Hash().Check("password", hashed)
+    assert.True(t, isValid)
+    
+    mockHash.AssertExpectations(t)
+}
+```
+
+### Mock facades.Gate
+```go
+// ✅ REQUIRED - Mock Gate facade
+func Gate() bool {
+    return facades.Gate().Allows("update-post", map[string]any{
+        "post": "test",
+    })
+}
+
+func TestGate(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockGate := mockFactory.Gate()
+    mockGate.On("Allows", "update-post", map[string]any{
+        "post": "test",
+    }).Return(true).Once()
+
+    assert.True(t, Gate())
+    mockGate.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock Gate with multiple operations
+func TestGateMultipleOperations(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockGate := mockFactory.Gate()
+    
+    mockGate.On("Allows", "update-post", mock.Anything).Return(true).Once()
+    mockGate.On("Denies", "delete-post", mock.Anything).Return(false).Once()
+    mockGate.On("Any", []string{"read", "write"}, mock.Anything).Return(true).Once()
+    mockGate.On("None", []string{"admin"}, mock.Anything).Return(true).Once()
+    
+    // Test gate operations
+    canUpdate := facades.Gate().Allows("update-post", map[string]any{"post": "test"})
+    canDelete := facades.Gate().Denies("delete-post", map[string]any{"post": "test"})
+    canAny := facades.Gate().Any([]string{"read", "write"}, map[string]any{"user": "test"})
+    canNone := facades.Gate().None([]string{"admin"}, map[string]any{"user": "test"})
+    
+    assert.True(t, canUpdate)
+    assert.False(t, canDelete)
+    assert.True(t, canAny)
+    assert.True(t, canNone)
+    
+    mockGate.AssertExpectations(t)
+}
+```
+
+## Mocking Communication Facades
+
+### Mock facades.Event
+```go
+// ✅ REQUIRED - Mock Event facade
+import "github.com/goravel/framework/testing/mock"
+
+func Event() error {
+    return facades.Event().Job(&events.TestEvent{}, []contractevent.Arg{
+        {Type: "string", Value: "abcc"},
+        {Type: "int", Value: 1234},
+    }).Dispatch()
+}
+
+func TestEvent(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockEvent := mockFactory.Event()
+    mockTask := mockFactory.EventTask()
+    mockEvent.On("Job", mock.Anything, mock.Anything).Return(mockTask).Once()
+    mockTask.On("Dispatch").Return(nil).Once()
+
+    assert.Nil(t, Event())
+    mockEvent.AssertExpectations(t)
+    mockTask.AssertExpectations(t)
+}
+```
+
+### Mock facades.Mail
+```go
+// ✅ REQUIRED - Mock Mail facade
+import "github.com/goravel/framework/testing/mock"
+
+func Mail() error {
+    return facades.Mail().From(mail.From{Address: "example@example.com", Name: "example"}).
+        To([]string{"example@example.com"}).
+        Content(mail.Content{Subject: "Subject", Html: "<h1>Hello Goravel</h1>"}).
+        Send()
+}
+
+func TestMail(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockMail := mockFactory.Mail()
+    mockMail.On("From", mail.From{Address: "example@example.com", Name: "example"}).Return(mockMail)
+    mockMail.On("To", []string{"example@example.com"}).Return(mockMail)
+    mockMail.On("Content", mail.Content{Subject: "Subject", Html: "<h1>Hello Goravel</h1>"}).Return(mockMail)
+    mockMail.On("Send").Return(nil)
+
+    assert.Nil(t, Mail())
+    mockMail.AssertExpectations(t)
+}
+```
+
+### Mock facades.Queue
+```go
+// ✅ REQUIRED - Mock Queue facade
+import "github.com/goravel/framework/testing/mock"
+
+func Queue() error {
+    return facades.Queue().Job(&jobs.TestSyncJob{}, []queue.Arg{}).Dispatch()
+}
+
+func TestQueue(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockQueue := mockFactory.Queue()
+    mockTask := mockFactory.QueueTask()
+    mockQueue.On("Job", mock.Anything, mock.Anything).Return(mockTask).Once()
+    mockTask.On("Dispatch").Return(nil).Once()
+
+    assert.Nil(t, Queue())
+    mockQueue.AssertExpectations(t)
+    mockTask.AssertExpectations(t)
+}
+```
+
+## Mocking Data Facades
+
+### Mock facades.Orm
+```go
+// ✅ REQUIRED - Mock ORM facade
+import "github.com/goravel/framework/testing/mock"
+
+func Orm() error {
+    if err := facades.Orm().Query().Create(&Test{}); err != nil {
+        return err
+    }
+    var test Test
+    return facades.Orm().Query().Where("id = ?", 1).Find(&test)
+}
+
+func TestOrm(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockOrm := mockFactory.Orm()
+    mockOrmQuery := mockFactory.OrmQuery()
+    mockOrm.On("Query").Return(mockOrmQuery)
+
+    mockOrmQuery.On("Create", mock.Anything).Return(nil).Once()
+    mockOrmQuery.On("Where", "id = ?", 1).Return(mockOrmQuery).Once()
+    mockOrmQuery.On("Find", mock.Anything).Return(nil).Once()
+
+    assert.Nil(t, Orm())
+    mockOrm.AssertExpectations(t)
+    mockOrmQuery.AssertExpectations(t)
+}
+
+// ✅ REQUIRED - Mock ORM with transactions
+func Transaction() error {
+    return facades.Orm().Transaction(func(tx contractorm.Transaction) error {
+        var test Test
+        if err := tx.Create(&test); err != nil {
+            return err
+        }
+        var test1 Test
+        return tx.Where("id = ?", test.ID).Find(&test1)
+    })
+}
+
+func TestTransaction(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockOrm := mockFactory.Orm()
+    mockOrmTransaction := mockFactory.OrmTransaction()
+    mockOrm.On("Transaction", mock.Anything).Return(func(txFunc func(tx orm.Transaction) error) error {
+        return txFunc(mockOrmTransaction)
+    })
+
+    var test Test
+    mockOrmTransaction.On("Create", &test).Return(func(test2 interface{}) error {
+        test2.(*Test).ID = 1
+        return nil
+    }).Once()
+    mockOrmTransaction.On("Where", "id = ?", uint(1)).Return(mockOrmTransaction).Once()
+    mockOrmTransaction.On("Find", mock.Anything).Return(nil).Once()
+
+    assert.Nil(t, Transaction())
+    mockOrm.AssertExpectations(t)
+    mockOrmTransaction.AssertExpectations(t)
+}
+```
+
+### Mock facades.Storage
+```go
+// ✅ REQUIRED - Mock Storage facade
+import (
+    "context"
+    "testing"
+    "github.com/goravel/framework/filesystem"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/goravel/framework/facades"
+)
+
+func Storage() (string, error) {
+    file, _ := filesystem.NewFile("1.txt")
+    return facades.Storage().WithContext(context.Background()).PutFile("file", file)
+}
+
+func TestStorage(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockStorage := mockFactory.Storage()
+    mockDriver := mockFactory.StorageDriver()
+    mockStorage.On("WithContext", context.Background()).Return(mockDriver).Once()
+    file, _ := filesystem.NewFile("1.txt")
+    mockDriver.On("PutFile", "file", file).Return("path/to/file", nil).Once()
+    
+    path, err := Storage()
+    assert.Equal(t, "path/to/file", path)
+    assert.Nil(t, err)
+    mockStorage.AssertExpectations(t)
+    mockDriver.AssertExpectations(t)
+}
+```
+
+## Mocking Utility Facades
+
+### Mock facades.Validation
+```go
+// ✅ REQUIRED - Mock Validation facade
+import (
+    "testing"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/stretchr/testify/assert"
+    "github.com/goravel/framework/facades"
+)
+
+func Validation() string {
+    validator, _ := facades.Validation().Make(map[string]string{
+        "a": "b",
+    }, map[string]string{
+        "a": "required",
+    })
+    errors := validator.Errors()
+    return errors.One("a")
+}
+
+func TestValidation(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockValidation := mockFactory.Validation()
+    mockValidator := mockFactory.ValidationValidator()
+    mockErrors := mockFactory.ValidationErrors()
+    
+    mockValidation.On("Make", map[string]string{
+        "a": "b",
+    }, map[string]string{
+        "a": "required",
+    }).Return(mockValidator, nil).Once()
+    mockValidator.On("Errors").Return(mockErrors).Once()
+    mockErrors.On("One", "a").Return("error").Once()
+    
+    err := Validation()
+    assert.Equal(t, "error", err)
+    mockValidation.AssertExpectations(t)
+    mockValidator.AssertExpectations(t)
+    mockErrors.AssertExpectations(t)
+}
+```
+
+### Mock facades.View
+```go
+// ✅ REQUIRED - Mock View facade
+import (
+    "testing"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/stretchr/testify/assert"
+    "github.com/goravel/framework/facades"
+)
+
+func View() bool {
+    return facades.View().Exists("welcome.tmpl")
+}
+
+func TestView(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockView := mockFactory.View()
+    mockView.On("Exists", "welcome.tmpl").Return(true).Once()
+
+    assert.True(t, View())
+    mockView.AssertExpectations(t)
+}
+```
+
+### Mock facades.Lang
+```go
+// ✅ REQUIRED - Mock Lang facade
+func Lang() string {
+    return facades.Lang(context.Background()).Get("name")
+}
+
+func TestLang(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockLang := mockFactory.Lang()
+    mockLang.On("Get", "name").Return("Goravel").Once()
+
+    assert.Equal(t, "Goravel", Lang())
+    mockLang.AssertExpectations(t)
+}
+```
+
+### Mock facades.Grpc
+```go
+// ✅ REQUIRED - Mock Grpc facade
+import (
+    "context"
+    "errors"
+    "testing"
+    "github.com/goravel/framework/testing/mock"
+    "github.com/stretchr/testify/assert"
+    "google.golang.org/grpc"
+    "github.com/goravel/framework/facades"
+)
+
+func Grpc() (*grpc.ClientConn, error) {
+    return facades.Grpc().Client(context.Background(), "user")
+}
+
+func TestGrpc(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockGrpc := mockFactory.Grpc()
+    mockGrpc.On("Client", context.Background(), "user").Return(nil, errors.New("error")).Once()
+    
+    conn, err := Grpc()
+    assert.Nil(t, conn)
+    assert.EqualError(t, err, "error")
+    mockGrpc.AssertExpectations(t)
+}
+```
+
+## Advanced Mocking Patterns
+
+### Mock with Multiple Calls
+```go
+// ✅ REQUIRED - Mock with multiple method calls
+func TestMultipleCalls(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+    
+    // Mock multiple calls
+    mockCache.On("Get", "key1", "default").Return("value1").Once()
+    mockCache.On("Get", "key2", "default").Return("value2").Once()
+    mockCache.On("Get", "key3", "default").Return("value3").Once()
+    
+    // Test multiple calls
+    val1 := facades.Cache().Get("key1", "default")
+    val2 := facades.Cache().Get("key2", "default")
+    val3 := facades.Cache().Get("key3", "default")
+    
+    assert.Equal(t, "value1", val1)
+    assert.Equal(t, "value2", val2)
+    assert.Equal(t, "value3", val3)
+    
+    mockCache.AssertExpectations(t)
+}
+```
+
+### Mock with Any Arguments
+```go
+// ✅ REQUIRED - Mock with any arguments
+func TestAnyArguments(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+    
+    // Mock with any arguments
+    mockCache.On("Put", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+    mockCache.On("Get", mock.Anything, mock.Anything).Return("value").Once()
+    
+    // Test with any arguments
+    err := facades.Cache().Put("any_key", "any_value", 5*time.Minute)
+    assert.NoError(t, err)
+    
+    value := facades.Cache().Get("any_key", "default")
+    assert.Equal(t, "value", value)
+    
+    mockCache.AssertExpectations(t)
+}
+```
+
+### Mock with Custom Matchers
+```go
+// ✅ REQUIRED - Mock with custom matchers
+func TestCustomMatchers(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+    
+    // Mock with custom matcher
+    mockCache.On("Put", mock.MatchedBy(func(key string) bool {
+        return strings.HasPrefix(key, "user_")
+    }), mock.Anything, mock.Anything).Return(nil).Once()
+    
+    // Test with matching key
+    err := facades.Cache().Put("user_123", "data", 5*time.Minute)
+    assert.NoError(t, err)
+    
+    mockCache.AssertExpectations(t)
+}
+```
+
+### Mock with Return Functions
+```go
+// ✅ REQUIRED - Mock with return functions
+func TestReturnFunctions(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockOrm := mockFactory.Orm()
+    mockQuery := mockFactory.OrmQuery()
+    
+    mockOrm.On("Query").Return(mockQuery)
+    mockQuery.On("Create", mock.Anything).Return(func(model interface{}) error {
+        // Simulate setting ID
+        if user, ok := model.(*models.User); ok {
+            user.ID = 1
+        }
+        return nil
+    }).Once()
+    
+    user := &models.User{Name: "Test"}
+    err := facades.Orm().Query().Create(user)
+    assert.NoError(t, err)
+    assert.Equal(t, uint(1), user.ID)
+    
+    mockOrm.AssertExpectations(t)
+    mockQuery.AssertExpectations(t)
+}
+```
+
+## Mock Testing Best Practices
+
+### Test Organization
+```go
+// ✅ REQUIRED - Organized mock tests
+type MockTestSuite struct {
+    suite.Suite
+    tests.TestCase
+    mockFactory *mock.Factory
+}
+
+func (s *MockTestSuite) SetupTest() {
+    s.mockFactory = mock.Factory()
+}
+
+func (s *MockTestSuite) TearDownTest() {
+    // Clean up mocks
+    s.mockFactory = nil
+}
+
+func (s *MockTestSuite) TestUserService() {
+    // Setup mocks
+    mockOrm := s.mockFactory.Orm()
+    mockQuery := s.mockFactory.OrmQuery()
+    mockOrm.On("Query").Return(mockQuery)
+    
+    // Test implementation
+    // ...
+    
+    // Assert expectations
+    mockOrm.AssertExpectations(s.T())
+    mockQuery.AssertExpectations(s.T())
+}
+```
+
+### Mock Documentation
+```go
+// ✅ REQUIRED - Documented mock tests
+// TestUserServiceWithMocks tests the user service with mocked dependencies
+// It verifies that the service correctly interacts with the ORM facade
+// and handles errors appropriately
+func TestUserServiceWithMocks(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockOrm := mockFactory.Orm()
+    
+    // Mock ORM operations
+    mockOrm.On("Query").Return(mockQuery)
+    mockQuery.On("Create", mock.Anything).Return(nil).Once()
+    
+    // Test service
+    // ...
+    
+    mockOrm.AssertExpectations(t)
+}
+```
+
+### Error Testing with Mocks
+```go
+// ✅ REQUIRED - Error testing with mocks
+func TestErrorHandling(t *testing.T) {
+    mockFactory := mock.Factory()
+    mockCache := mockFactory.Cache()
+    
+    // Mock error scenario
+    mockCache.On("Get", "error_key", "default").Return(nil, errors.New("cache error")).Once()
+    
+    // Test error handling
+    value, err := facades.Cache().Get("error_key", "default")
+    assert.Nil(t, value)
+    assert.Error(t, err)
+    assert.Equal(t, "cache error", err.Error())
+    
+    mockCache.AssertExpectations(t)
+}
+```
+
+## Best Practices Summary
+
+### Design Principles
+- **Interface-Based Mocking**: Mock interfaces, not concrete implementations
+- **Expectation Management**: Set clear expectations and verify them
+- **Test Isolation**: Use mocks to isolate units under test
+- **Mock Factory**: Use centralized mock factory for consistency
+
+### Performance Considerations
+- **Mock Efficiency**: Use mocks to avoid expensive operations
+- **Test Speed**: Mocks make tests faster than real implementations
+- **Resource Management**: Mocks don't consume real resources
+- **Parallel Testing**: Mocks enable parallel test execution
+
+### Security Considerations
+- **Mock Data**: Use safe mock data without sensitive information
+- **Mock Isolation**: Ensure mocks don't leak real data
+- **Test Security**: Test security scenarios with mocks
+- **Mock Validation**: Validate mock behavior matches real behavior
+
+### Reliability Considerations
+- **Mock Accuracy**: Ensure mocks accurately represent real behavior
+- **Expectation Coverage**: Cover all expected method calls
+- **Error Scenarios**: Test error scenarios with mocks
+- **Mock Maintenance**: Keep mocks up to date with real implementations

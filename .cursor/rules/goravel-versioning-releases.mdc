@@ -1,0 +1,148 @@
+---
+alwaysApply: true
+---
+
+# Goravel Versioning & Release Management
+
+Based on the [official Goravel release notes documentation](https://www.goravel.dev/getting-started/releases.html).
+
+## Versioning Scheme
+
+### Release Schedule
+- **Major Releases**: Every half year (~Q1 and ~Q3)
+- **Patch Releases**: As often as every week
+- **Breaking Changes**: Patch releases should never contain breaking changes
+- **Stability**: Regular release cycle ensures framework stability
+
+### Release Timeline
+- **Q1 Releases**: Major version updates in first quarter
+- **Q3 Releases**: Major version updates in third quarter
+- **Weekly Patches**: Bug fixes and minor improvements
+- **Predictable Schedule**: Consistent release timing for planning
+
+## Support Policy
+
+### Bug Fix Support
+- **12 Months**: Bug fixes provided for 12 months for all releases
+- **Long-term Support**: Extended support for major versions
+- **Security Updates**: Critical security patches included
+- **Maintenance**: Regular maintenance and bug fixes
+
+### Version Support Matrix
+
+| Version | Golang | Release Date | Bug Fixes Until |
+|---------|--------|--------------|-----------------|
+| 1.14    | 1.21   | Jun 8, 2024  | Jun 8, 2025     |
+| 1.15    | 1.22   | Dec 31, 2024 | Dec 31, 2025    |
+| 1.16    | 1.23   | Jul 20, 2025 | Jul 20, 2026    |
+| 1.17    | 1.24   | Q1 2026      | Q1 2027         |
+
+## Golang Version Requirements
+
+### Version Compatibility
+- **1.14**: Requires Golang 1.21+
+- **1.15**: Requires Golang 1.22+
+- **1.16**: Requires Golang 1.23+
+- **1.17**: Requires Golang 1.24+
+
+### Upgrade Considerations
+- **Golang Updates**: Framework versions tied to Golang versions
+- **Feature Availability**: New Golang features available in framework
+- **Performance**: Golang improvements benefit framework performance
+- **Compatibility**: Framework leverages latest Golang capabilities
+
+## Development Guidelines
+
+### Version Selection
+- **Current Stable**: Use the latest stable version for new projects
+- **LTS Support**: Consider long-term support for production applications
+- **Golang Compatibility**: Ensure Golang version compatibility
+- **Feature Requirements**: Choose version based on required features
+
+### Upgrade Planning
+- **Major Upgrades**: Plan for major version upgrades
+- **Breaking Changes**: Review breaking changes in major releases
+- **Testing**: Test applications after version upgrades
+- **Migration**: Follow upgrade guides for major versions
+
+### Version Management
+- **Dependency Management**: Use appropriate version constraints
+- **Lock Files**: Lock dependency versions for stability
+- **Update Strategy**: Regular updates for security and features
+- **Rollback Plan**: Prepare rollback strategies for critical applications
+
+## Best Practices
+
+### Production Applications
+- **Stable Versions**: Use stable, well-tested versions
+- **Security Updates**: Apply security patches promptly
+- **Version Pinning**: Pin specific versions for production
+- **Monitoring**: Monitor for new releases and security updates
+
+### Development Workflow
+- **Latest Features**: Use latest versions for new development
+- **Testing**: Test with multiple versions when possible
+- **CI/CD**: Include version testing in CI/CD pipelines
+- **Documentation**: Document version requirements
+
+### Upgrade Strategy
+- **Gradual Upgrades**: Upgrade gradually through versions
+- **Testing**: Comprehensive testing after each upgrade
+- **Backup**: Backup before major upgrades
+- **Documentation**: Document upgrade process and issues
+
+## Framework Integration
+
+### Version-Specific Features
+- **Feature Detection**: Check for version-specific features
+- **Conditional Code**: Use conditional compilation for version features
+- **Backward Compatibility**: Maintain backward compatibility when possible
+- **Migration Tools**: Use framework migration tools for upgrades
+
+### Configuration Management
+- **Version Configuration**: Configure applications for specific versions
+- **Environment Variables**: Use environment variables for version control
+- **Feature Flags**: Implement feature flags for version-specific features
+- **Configuration Validation**: Validate configuration for version compatibility
+
+## Security Considerations
+
+### Security Updates
+- **Regular Updates**: Apply security updates promptly
+- **Vulnerability Monitoring**: Monitor for security vulnerabilities
+- **Patch Management**: Implement proper patch management
+- **Security Testing**: Test security updates before deployment
+
+### Version Security
+- **Supported Versions**: Use supported versions for security updates
+- **End-of-Life**: Avoid end-of-life versions
+- **Security Patches**: Apply security patches immediately
+- **Vulnerability Assessment**: Regular vulnerability assessments
+
+## Development Workflow
+
+### Version Control
+- **Git Tags**: Use Git tags for version management
+- **Branch Strategy**: Implement proper branching strategy
+- **Release Process**: Follow consistent release process
+- **Version Documentation**: Document version changes
+
+### Testing Strategy
+- **Version Testing**: Test across multiple versions
+- **Compatibility Testing**: Test compatibility with dependencies
+- **Regression Testing**: Test for regressions after upgrades
+- **Performance Testing**: Test performance impact of upgrades
+
+## Monitoring and Maintenance
+
+### Version Monitoring
+- **Release Notifications**: Subscribe to release notifications
+- **Security Alerts**: Monitor security alerts
+- **Deprecation Warnings**: Watch for deprecation warnings
+- **Upgrade Recommendations**: Follow upgrade recommendations
+
+### Maintenance Planning
+- **Regular Updates**: Plan regular update cycles
+- **Major Upgrades**: Plan major version upgrades
+- **End-of-Life Planning**: Plan for end-of-life versions
+- **Migration Planning**: Plan migration to newer versions

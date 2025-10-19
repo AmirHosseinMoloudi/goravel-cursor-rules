@@ -1,0 +1,47 @@
+---
+alwaysApply: true
+---
+# Laravel Conventions for Goravel
+
+## Naming Conventions
+- **Controllers**: PascalCase with "Controller" suffix (e.g., `UserController`)
+- **Models**: PascalCase singular (e.g., `User`, `Post`)
+- **Routes**: kebab-case or snake_case (e.g., `/user-profile`, `/user_profile`)
+- **Database Tables**: snake_case plural (e.g., `users`, `user_profiles`)
+- **Database Columns**: snake_case (e.g., `created_at`, `user_id`)
+
+## Directory Structure
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   ├── Middleware/
+│   └── Requests/
+├── Models/
+├── Services/
+└── Providers/
+```
+
+## Route Organization
+- Group related routes using route groups
+- Use resource routes for CRUD operations
+- Apply middleware at route or controller level
+- Use named routes for URL generation
+
+## Controller Patterns
+- Keep controllers thin - delegate business logic to services
+- Use dependency injection for services
+- Return proper HTTP responses with status codes
+- Validate input using request classes
+
+## Model Relationships
+- Define relationships clearly (hasOne, hasMany, belongsTo, belongsToMany)
+- Use proper foreign key naming conventions
+- Implement soft deletes where appropriate
+- Use model events for business logic
+
+## Service Layer
+- Create service classes for complex business logic
+- Use interfaces for service contracts
+- Implement proper dependency injection
+- Keep services focused and testable

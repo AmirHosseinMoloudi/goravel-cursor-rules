@@ -1,0 +1,673 @@
+---
+alwaysApply: true
+---
+
+# Goravel Comprehensive Best Practices
+
+**CRITICAL**: This rule enforces the most comprehensive and up-to-date best practices for Goravel framework development, ensuring optimal code quality, maintainability, and performance.
+
+## Framework Architecture Best Practices
+
+### Core Framework Requirements
+- **EVERY** Goravel application must follow the official framework architecture
+- **EVERY** service must be properly registered in service providers
+- **EVERY** configuration must be environment-aware and secure
+- **EVERY** route must follow RESTful conventions
+- **EVERY** controller must follow single responsibility principle
+- **EVERY** model must use proper ORM patterns
+- **EVERY** middleware must be properly registered and tested
+
+### Prohibited Anti-Patterns
+```go
+// ❌ FORBIDDEN - Direct database access in controllers
+func (c *UserController) Show(ctx http.Context) http.Response {
+    var user User
+    facades.Orm().Query().Where("id", ctx.Request().RouteInt("id")).First(&user)
+    return ctx.Response().Json(http.StatusOK, http.Json{"user": user})
+}
+
+// ❌ FORBIDDEN - Business logic in controllers
+func (c *UserController) CreateUser(ctx http.Context) http.Response {
+    // Complex business logic here - WRONG
+    if user.Age < 18 {
+        // Business logic in controller
+    }
+}
+
+// ❌ FORBIDDEN - Direct HTTP client usage without abstraction
+func (c *UserController) CallExternalAPI(ctx http.Context) http.Response {
+    resp, err := http.Get("https://api.example.com/data")
+    // Direct HTTP calls without service abstraction
+}
+```
+
+### Required Best Practices
+```go
+// ✅ REQUIRED - Service layer abstraction
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "user": user,
+    })
+}
+
+// ✅ REQUIRED - Business logic in services
+func (s *UserService) CreateUser(input CreateUserRequest) (*User, error) {
+    // Business logic validation
+    if input.Age < 18 {
+        return nil, errors.New("user must be at least 18 years old")
+    }
+    
+    // Create user with business rules
+    user := &User{
+        Name:  input.Name,
+        Email: input.Email,
+        Age:   input.Age,
+    }
+    
+    return s.userRepository.Create(user)
+}
+
+// ✅ REQUIRED - Service abstraction for external APIs
+func (s *ExternalAPIService) GetData() (*APIData, error) {
+    // Abstracted HTTP client usage
+    return s.httpClient.Get("/api/data")
+}
+```
+
+## Security Best Practices
+
+### Authentication & Authorization
+```go
+// ✅ REQUIRED - Secure authentication middleware
+func AuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        token := ctx.Request().Header("Authorization")
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Validate JWT token
+        payload, err := facades.Auth(ctx).Parse(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        // Set user in context
+        ctx.Set("user_id", payload.Key)
+        ctx.Next()
+    }
+}
+
+// ✅ REQUIRED - Role-based authorization
+func (c *UserController) DeleteUser(ctx http.Context) http.Response {
+    // Check if user has admin role
+    if !facades.Gate().Allows("delete-user", map[string]any{
+        "user_id": ctx.Value("user_id"),
+    }) {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "Insufficient permissions",
+        })
+    }
+    
+    // Proceed with deletion
+    return c.userService.DeleteUser(ctx.Request().RouteInt("id"))
+}
+```
+
+### Input Validation & Sanitization
+```go
+// ✅ REQUIRED - Comprehensive input validation
+type CreateUserRequest struct {
+    Name     string `json:"name" validate:"required,min=2,max=100"`
+    Email    string `json:"email" validate:"required,email"`
+    Age      int    `json:"age" validate:"required,min=18,max=120"`
+    Password string `json:"password" validate:"required,min=8"`
+}
+
+func (c *UserController) CreateUser(ctx http.Context) http.Response {
+    var input CreateUserRequest
+    if err := ctx.Request().Bind(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid request data",
+        })
+    }
+    
+    // Validate input
+    if err := c.validator.Validate(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Validation failed",
+            "details": err.Error(),
+        })
+    }
+    
+    // Sanitize input
+    input.Name = strings.TrimSpace(input.Name)
+    input.Email = strings.ToLower(strings.TrimSpace(input.Email))
+    
+    user, err := c.userService.CreateUser(input)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create user",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusCreated, http.Json{
+        "user": user,
+    })
+}
+```
+
+### Data Protection
+```go
+// ✅ REQUIRED - Encrypt sensitive data
+func (s *UserService) CreateUser(input CreateUserRequest) (*User, error) {
+    // Hash password
+    hashedPassword, err := facades.Hash().Make(input.Password)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Encrypt sensitive data
+    encryptedEmail, err := facades.Crypt().EncryptString(input.Email)
+    if err != nil {
+        return nil, err
+    }
+    
+    user := &User{
+        Name:     input.Name,
+        Email:    encryptedEmail,
+        Password: hashedPassword,
+        Age:      input.Age,
+    }
+    
+    return s.userRepository.Create(user)
+}
+
+// ✅ REQUIRED - Secure data retrieval
+func (s *UserService) GetUser(id int) (*User, error) {
+    user, err := s.userRepository.FindByID(id)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Decrypt sensitive data
+    decryptedEmail, err := facades.Crypt().DecryptString(user.Email)
+    if err != nil {
+        return nil, err
+    }
+    
+    user.Email = decryptedEmail
+    // Remove password from response
+    user.Password = ""
+    
+    return user, nil
+}
+```
+
+## Performance Optimization
+
+### Database Optimization
+```go
+// ✅ REQUIRED - Efficient database queries
+func (r *UserRepository) GetUsersWithPosts(page, limit int) ([]*User, error) {
+    var users []*User
+    
+    // Use eager loading to prevent N+1 queries
+    err := facades.Orm().Query().
+        Preload("Posts").
+        Preload("Profile").
+        Offset((page - 1) * limit).
+        Limit(limit).
+        Find(&users)
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return users, nil
+}
+
+// ✅ REQUIRED - Database indexing
+func (m *CreateUsersTable) Up() {
+    m.Schema().Create("users", func(table *schema.Blueprint) {
+        table.Increments("id")
+        table.String("name")
+        table.String("email").Unique()
+        table.Integer("age")
+        table.Timestamps()
+        
+        // Add indexes for performance
+        table.Index("email")
+        table.Index("age")
+        table.Index("created_at")
+    })
+}
+```
+
+### Caching Strategies
+```go
+// ✅ REQUIRED - Intelligent caching
+func (s *UserService) GetUser(id int) (*User, error) {
+    // Try cache first
+    cacheKey := fmt.Sprintf("user:%d", id)
+    if cached, err := facades.Cache().Get(cacheKey); err == nil {
+        return cached.(*User), nil
+    }
+    
+    // Fetch from database
+    user, err := s.userRepository.FindByID(id)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Cache for 1 hour
+    facades.Cache().Put(cacheKey, user, 1*time.Hour)
+    
+    return user, nil
+}
+
+// ✅ REQUIRED - Cache invalidation
+func (s *UserService) UpdateUser(id int, input UpdateUserRequest) (*User, error) {
+    user, err := s.userService.UpdateUser(id, input)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Invalidate cache
+    cacheKey := fmt.Sprintf("user:%d", id)
+    facades.Cache().Forget(cacheKey)
+    
+    return user, nil
+}
+```
+
+### Memory Management
+```go
+// ✅ REQUIRED - Efficient memory usage
+func (s *UserService) ProcessLargeDataset() error {
+    // Process in batches to avoid memory issues
+    batchSize := 1000
+    offset := 0
+    
+    for {
+        var users []User
+        err := facades.Orm().Query().
+            Offset(offset).
+            Limit(batchSize).
+            Find(&users)
+        
+        if err != nil {
+            return err
+        }
+        
+        if len(users) == 0 {
+            break
+        }
+        
+        // Process batch
+        for _, user := range users {
+            // Process user
+            s.processUser(user)
+        }
+        
+        offset += batchSize
+        
+        // Force garbage collection for large datasets
+        if offset%10000 == 0 {
+            runtime.GC()
+        }
+    }
+    
+    return nil
+}
+```
+
+## Error Handling & Logging
+
+### Comprehensive Error Handling
+```go
+// ✅ REQUIRED - Structured error handling
+type AppError struct {
+    Code    string `json:"code"`
+    Message string `json:"message"`
+    Details string `json:"details,omitempty"`
+}
+
+func (e *AppError) Error() string {
+    return e.Message
+}
+
+func (c *UserController) CreateUser(ctx http.Context) http.Response {
+    var input CreateUserRequest
+    if err := ctx.Request().Bind(&input); err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": &AppError{
+                Code:    "INVALID_REQUEST",
+                Message: "Invalid request data",
+                Details: err.Error(),
+            },
+        })
+    }
+    
+    user, err := c.userService.CreateUser(input)
+    if err != nil {
+        // Log error with context
+        facades.Log().Error("Failed to create user", map[string]any{
+            "error": err.Error(),
+            "input": input,
+            "user_id": ctx.Value("user_id"),
+        })
+        
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": &AppError{
+                Code:    "USER_CREATION_FAILED",
+                Message: "Failed to create user",
+            },
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusCreated, http.Json{
+        "user": user,
+    })
+}
+```
+
+### Structured Logging
+```go
+// ✅ REQUIRED - Comprehensive logging
+func (s *UserService) CreateUser(input CreateUserRequest) (*User, error) {
+    // Log operation start
+    facades.Log().Info("Creating user", map[string]any{
+        "email": input.Email,
+        "name":  input.Name,
+    })
+    
+    // Validate input
+    if err := s.validateUserInput(input); err != nil {
+        facades.Log().Warning("User validation failed", map[string]any{
+            "error": err.Error(),
+            "input": input,
+        })
+        return nil, err
+    }
+    
+    // Create user
+    user, err := s.userRepository.Create(&User{
+        Name:  input.Name,
+        Email: input.Email,
+        Age:   input.Age,
+    })
+    
+    if err != nil {
+        facades.Log().Error("User creation failed", map[string]any{
+            "error": err.Error(),
+            "input": input,
+        })
+        return nil, err
+    }
+    
+    // Log success
+    facades.Log().Info("User created successfully", map[string]any{
+        "user_id": user.ID,
+        "email":   user.Email,
+    })
+    
+    return user, nil
+}
+```
+
+## Testing Best Practices
+
+### Unit Testing
+```go
+// ✅ REQUIRED - Comprehensive unit tests
+func TestUserService_CreateUser(t *testing.T) {
+    // Setup
+    mockRepo := &MockUserRepository{}
+    validator := &MockValidator{}
+    service := NewUserService(mockRepo, validator)
+    
+    // Test data
+    input := CreateUserRequest{
+        Name:     "John Doe",
+        Email:    "john@example.com",
+        Age:      25,
+        Password: "password123",
+    }
+    
+    // Mock expectations
+    mockRepo.On("Create", mock.AnythingOfType("*User")).Return(&User{
+        ID:    1,
+        Name:  input.Name,
+        Email: input.Email,
+        Age:   input.Age,
+    }, nil)
+    
+    validator.On("Validate", &input).Return(nil)
+    
+    // Execute
+    user, err := service.CreateUser(input)
+    
+    // Assertions
+    assert.NoError(t, err)
+    assert.Equal(t, input.Name, user.Name)
+    assert.Equal(t, input.Email, user.Email)
+    assert.Equal(t, input.Age, user.Age)
+    
+    // Verify interactions
+    mockRepo.AssertExpectations(t)
+    validator.AssertExpectations(t)
+}
+```
+
+### Integration Testing
+```go
+// ✅ REQUIRED - Integration tests
+func TestUserController_CreateUser(t *testing.T) {
+    // Setup test server
+    app := fiber.New()
+    
+    // Setup routes
+    app.Post("/users", userController.CreateUser)
+    
+    // Test data
+    input := map[string]interface{}{
+        "name":     "John Doe",
+        "email":    "john@example.com",
+        "age":      25,
+        "password": "password123",
+    }
+    
+    // Create request
+    jsonData, _ := json.Marshal(input)
+    req := httptest.NewRequest("POST", "/users", bytes.NewBuffer(jsonData))
+    req.Header.Set("Content-Type", "application/json")
+    
+    // Execute
+    resp, err := app.Test(req)
+    
+    // Assertions
+    assert.NoError(t, err)
+    assert.Equal(t, 201, resp.StatusCode)
+    
+    // Parse response
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    
+    assert.Contains(t, result, "user")
+    assert.Equal(t, input["name"], result["user"].(map[string]interface{})["name"])
+}
+```
+
+## API Design Best Practices
+
+### RESTful API Design
+```go
+// ✅ REQUIRED - RESTful API endpoints
+func setupAPIRoutes() {
+    // Users resource
+    facades.Route().Group("api/v1", func(router route.Router) {
+        // GET /api/v1/users - List users
+        router.Get("/users", userController.Index)
+        
+        // POST /api/v1/users - Create user
+        router.Post("/users", userController.Store)
+        
+        // GET /api/v1/users/{id} - Get user
+        router.Get("/users/{id}", userController.Show)
+        
+        // PUT /api/v1/users/{id} - Update user
+        router.Put("/users/{id}", userController.Update)
+        
+        // DELETE /api/v1/users/{id} - Delete user
+        router.Delete("/users/{id}", userController.Destroy)
+    })
+}
+```
+
+### API Response Standards
+```go
+// ✅ REQUIRED - Consistent API responses
+func (c *UserController) Index(ctx http.Context) http.Response {
+    users, total, err := c.userService.GetUsers(
+        ctx.Request().QueryInt("page", 1),
+        ctx.Request().QueryInt("limit", 10),
+    )
+    
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "data": users,
+        "meta": map[string]interface{}{
+            "total": total,
+            "page":  ctx.Request().QueryInt("page", 1),
+            "limit": ctx.Request().QueryInt("limit", 10),
+        },
+    })
+}
+```
+
+## Deployment & DevOps
+
+### Environment Configuration
+```go
+// ✅ REQUIRED - Environment-aware configuration
+func init() {
+    config := facades.Config
+    config.Add("app", map[string]interface{}{
+        "name":    config.Env("APP_NAME", "Goravel"),
+        "env":     config.Env("APP_ENV", "production"),
+        "debug":   config.Env("APP_DEBUG", false),
+        "url":     config.Env("APP_URL", "http://localhost"),
+        "key":     config.Env("APP_KEY", ""),
+        "timezone": config.Env("APP_TIMEZONE", "UTC"),
+    })
+    
+    config.Add("database", map[string]interface{}{
+        "default": config.Env("DB_CONNECTION", "mysql"),
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "goravel"),
+                "username": config.Env("DB_USERNAME", "root"),
+                "password": config.Env("DB_PASSWORD", ""),
+            },
+        },
+    })
+}
+```
+
+### Health Checks
+```go
+// ✅ REQUIRED - Application health checks
+func (c *HealthController) Check(ctx http.Context) http.Response {
+    health := map[string]interface{}{
+        "status": "healthy",
+        "timestamp": time.Now().Unix(),
+        "version": "1.0.0",
+    }
+    
+    // Check database connection
+    if err := facades.Orm().Query().Raw("SELECT 1").Error; err != nil {
+        health["database"] = "unhealthy"
+        health["status"] = "unhealthy"
+    } else {
+        health["database"] = "healthy"
+    }
+    
+    // Check cache
+    if err := facades.Cache().Put("health_check", "ok", 1*time.Second); err != nil {
+        health["cache"] = "unhealthy"
+        health["status"] = "unhealthy"
+    } else {
+        health["cache"] = "healthy"
+    }
+    
+    statusCode := http.StatusOK
+    if health["status"] == "unhealthy" {
+        statusCode = http.StatusServiceUnavailable
+    }
+    
+    return ctx.Response().Json(statusCode, http.Json{
+        "health": health,
+    })
+}
+```
+
+## Best Practices Summary
+
+### Design Principles
+- **Single Responsibility**: Each component has one clear purpose
+- **Dependency Injection**: Use DI for loose coupling
+- **Interface Segregation**: Use interfaces for abstraction
+- **Open/Closed Principle**: Open for extension, closed for modification
+- **DRY Principle**: Don't repeat yourself
+- **SOLID Principles**: Follow all SOLID principles
+
+### Performance Guidelines
+- **Database Optimization**: Use proper indexing and query optimization
+- **Caching Strategy**: Implement intelligent caching
+- **Memory Management**: Efficient memory usage
+- **Connection Pooling**: Use connection pooling
+- **Async Operations**: Use async where appropriate
+
+### Security Guidelines
+- **Input Validation**: Validate all inputs
+- **Authentication**: Implement proper authentication
+- **Authorization**: Use role-based access control
+- **Data Encryption**: Encrypt sensitive data
+- **HTTPS**: Use HTTPS in production
+- **Security Headers**: Set appropriate security headers
+
+### Testing Guidelines
+- **Unit Tests**: Test individual components
+- **Integration Tests**: Test component interactions
+- **End-to-End Tests**: Test complete workflows
+- **Mocking**: Use mocks for external dependencies
+- **Test Coverage**: Maintain high test coverage
+
+### Documentation Guidelines
+- **API Documentation**: Document all APIs
+- **Code Comments**: Comment complex logic
+- **README Files**: Maintain comprehensive READMEs
+- **Architecture Documentation**: Document system architecture
+- **Deployment Guides**: Provide deployment instructions

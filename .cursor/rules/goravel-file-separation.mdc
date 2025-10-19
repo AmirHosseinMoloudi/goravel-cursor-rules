@@ -1,0 +1,857 @@
+---
+alwaysApply: true
+---
+
+# Goravel File Separation & Modular Architecture
+
+**CRITICAL**: Always separate everything into separate files with maximum modularity and single responsibility principle.
+
+## File Separation Requirements
+
+### Mandatory File Separation
+- **EVERY** function must be in its own file when possible
+- **EVERY** struct must be in its own file
+- **EVERY** interface must be in its own file
+- **EVERY** service must be in its own file
+- **EVERY** repository must be in its own file
+- **EVERY** middleware must be in its own file
+- **EVERY** validator must be in its own file
+- **EVERY** transformer must be in its own file
+
+### Prohibited Patterns
+```go
+// ❌ FORBIDDEN - Multiple structs in one file
+// user.go
+type User struct {}
+type UserService struct {}
+type UserRepository struct {}
+type UserValidator struct {}
+
+// ❌ FORBIDDEN - Multiple functions in one file
+// utils.go
+func FormatDate() {}
+func FormatCurrency() {}
+func FormatPhone() {}
+func ValidateEmail() {}
+```
+
+### Required File Separation
+```go
+// ✅ REQUIRED - Each struct in separate file
+// app/models/user.go
+type User struct {
+    orm.Model
+    Name  string
+    Email string
+}
+
+// app/services/user_service.go
+type UserService struct {
+    userRepo UserRepository
+}
+
+// app/repositories/user_repository.go
+type UserRepository struct {
+    db orm.Query
+}
+
+// app/validators/user_validator.go
+type UserValidator struct {}
+```
+
+## Directory Structure Requirements
+
+### Mandatory Directory Structure
+```
+app/
+├── models/           # One model per file
+│   ├── user.go
+│   ├── post.go
+│   ├── comment.go
+│   └── role.go
+├── services/         # One service per file
+│   ├── user_service.go
+│   ├── post_service.go
+│   ├── auth_service.go
+│   └── email_service.go
+├── repositories/     # One repository per file
+│   ├── user_repository.go
+│   ├── post_repository.go
+│   └── auth_repository.go
+├── controllers/      # One controller per file
+│   ├── user_controller.go
+│   ├── post_controller.go
+│   └── auth_controller.go
+├── middleware/       # One middleware per file
+│   ├── auth_middleware.go
+│   ├── cors_middleware.go
+│   └── rate_limit_middleware.go
+├── validators/       # One validator per file
+│   ├── user_validator.go
+│   ├── post_validator.go
+│   └── auth_validator.go
+├── transformers/     # One transformer per file
+│   ├── user_transformer.go
+│   ├── post_transformer.go
+│   └── auth_transformer.go
+├── dto/             # One DTO per file
+│   ├── user_dto.go
+│   ├── post_dto.go
+│   └── auth_dto.go
+├── interfaces/      # One interface per file
+│   ├── user_interface.go
+│   ├── post_interface.go
+│   └── auth_interface.go
+└── exceptions/      # One exception per file
+    ├── user_exception.go
+    ├── post_exception.go
+    └── auth_exception.go
+```
+
+## Model Separation
+
+### Single Model Per File
+```go
+// ✅ REQUIRED - app/models/user.go
+package models
+
+import (
+    "github.com/goravel/framework/database/orm"
+)
+
+type User struct {
+    orm.Model
+    Name     string
+    Email    string
+    IsActive bool
+}
+
+// ✅ REQUIRED - app/models/post.go
+package models
+
+import (
+    "github.com/goravel/framework/database/orm"
+)
+
+type Post struct {
+    orm.Model
+    Title   string
+    Content string
+    UserID  uint
+    User    *User
+}
+```
+
+### Model Events in Separate Files
+```go
+// ✅ REQUIRED - app/models/events/user_events.go
+package models
+
+import (
+    "github.com/goravel/framework/contracts/database/orm"
+)
+
+func (u *User) DispatchesEvents() map[contractsorm.EventType]func(contractsorm.Event) error {
+    return map[contractsorm.EventType]func(contractsorm.Event) error{
+        contractsorm.EventCreating: func(event contractsorm.Event) error {
+            return nil
+        },
+    }
+}
+
+// ✅ REQUIRED - app/models/events/post_events.go
+package models
+
+func (p *Post) DispatchesEvents() map[contractsorm.EventType]func(contractsorm.Event) error {
+    return map[contractsorm.EventType]func(contractsorm.Event) error{
+        contractsorm.EventCreating: func(event contractsorm.Event) error {
+            return nil
+        },
+    }
+}
+```
+
+## Service Separation
+
+### Single Service Per File
+```go
+// ✅ REQUIRED - app/services/user_service.go
+package services
+
+import (
+    "goravel/app/interfaces"
+    "goravel/app/repositories"
+)
+
+type UserService struct {
+    userRepo interfaces.UserRepositoryInterface
+}
+
+func NewUserService(userRepo interfaces.UserRepositoryInterface) *UserService {
+    return &UserService{
+        userRepo: userRepo,
+    }
+}
+
+func (s *UserService) CreateUser(userData dto.CreateUserDTO) (*models.User, error) {
+    // Implementation
+}
+
+// ✅ REQUIRED - app/services/auth_service.go
+package services
+
+import (
+    "goravel/app/interfaces"
+)
+
+type AuthService struct {
+    userRepo interfaces.UserRepositoryInterface
+}
+
+func NewAuthService(userRepo interfaces.UserRepositoryInterface) *AuthService {
+    return &AuthService{
+        userRepo: userRepo,
+    }
+}
+
+func (s *AuthService) Login(credentials dto.LoginDTO) (string, error) {
+    // Implementation
+}
+```
+
+## Repository Separation
+
+### Single Repository Per File
+```go
+// ✅ REQUIRED - app/repositories/user_repository.go
+package repositories
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type UserRepository struct {
+}
+
+func NewUserRepository() *UserRepository {
+    return &UserRepository{}
+}
+
+func (r *UserRepository) FindByID(id uint) (*models.User, error) {
+    var user models.User
+    err := facades.Orm().Query().Where("id", id).First(&user)
+    return &user, err
+}
+
+func (r *UserRepository) Create(user *models.User) error {
+    return facades.Orm().Query().Create(user)
+}
+
+// ✅ REQUIRED - app/repositories/post_repository.go
+package repositories
+
+import (
+    "github.com/goravel/framework/facades"
+    "goravel/app/models"
+)
+
+type PostRepository struct {
+}
+
+func NewPostRepository() *PostRepository {
+    return &PostRepository{}
+}
+
+func (r *PostRepository) FindByUserID(userID uint) ([]*models.Post, error) {
+    var posts []*models.Post
+    err := facades.Orm().Query().Where("user_id", userID).Find(&posts)
+    return posts, err
+}
+```
+
+## Controller Separation
+
+### Single Controller Per File
+```go
+// ✅ REQUIRED - app/controllers/user_controller.go
+package controllers
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "goravel/app/services"
+    "goravel/app/dto"
+)
+
+type UserController struct {
+    userService *services.UserService
+}
+
+func NewUserController(userService *services.UserService) *UserController {
+    return &UserController{
+        userService: userService,
+    }
+}
+
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Implementation
+}
+
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Implementation
+}
+
+// ✅ REQUIRED - app/controllers/post_controller.go
+package controllers
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "goravel/app/services"
+)
+
+type PostController struct {
+    postService *services.PostService
+}
+
+func NewPostController(postService *services.PostService) *PostController {
+    return &PostController{
+        postService: postService,
+    }
+}
+
+func (c *PostController) Index(ctx http.Context) http.Response {
+    // Implementation
+}
+```
+
+## Middleware Separation
+
+### Single Middleware Per File
+```go
+// ✅ REQUIRED - app/middleware/auth_middleware.go
+package middleware
+
+import (
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+)
+
+func AuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Authentication logic
+        ctx.Next()
+    }
+}
+
+// ✅ REQUIRED - app/middleware/cors_middleware.go
+package middleware
+
+import (
+    "github.com/goravel/framework/contracts/http"
+)
+
+func CORSMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // CORS logic
+        ctx.Next()
+    }
+}
+
+// ✅ REQUIRED - app/middleware/rate_limit_middleware.go
+package middleware
+
+import (
+    "github.com/goravel/framework/contracts/http"
+)
+
+func RateLimitMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Rate limiting logic
+        ctx.Next()
+    }
+}
+```
+
+## Validator Separation
+
+### Single Validator Per File
+```go
+// ✅ REQUIRED - app/validators/user_validator.go
+package validators
+
+import (
+    "goravel/app/dto"
+)
+
+type UserValidator struct {
+}
+
+func NewUserValidator() *UserValidator {
+    return &UserValidator{}
+}
+
+func (v *UserValidator) ValidateCreateUser(data dto.CreateUserDTO) error {
+    // Validation logic
+    return nil
+}
+
+func (v *UserValidator) ValidateUpdateUser(data dto.UpdateUserDTO) error {
+    // Validation logic
+    return nil
+}
+
+// ✅ REQUIRED - app/validators/post_validator.go
+package validators
+
+import (
+    "goravel/app/dto"
+)
+
+type PostValidator struct {
+}
+
+func NewPostValidator() *PostValidator {
+    return &PostValidator{}
+}
+
+func (v *PostValidator) ValidateCreatePost(data dto.CreatePostDTO) error {
+    // Validation logic
+    return nil
+}
+```
+
+## Transformer Separation
+
+### Single Transformer Per File
+```go
+// ✅ REQUIRED - app/transformers/user_transformer.go
+package transformers
+
+import (
+    "goravel/app/models"
+    "goravel/app/dto"
+)
+
+type UserTransformer struct {
+}
+
+func NewUserTransformer() *UserTransformer {
+    return &UserTransformer{}
+}
+
+func (t *UserTransformer) ToDTO(user *models.User) dto.UserDTO {
+    return dto.UserDTO{
+        ID:    user.ID,
+        Name:  user.Name,
+        Email: user.Email,
+    }
+}
+
+func (t *UserTransformer) ToModel(data dto.CreateUserDTO) *models.User {
+    return &models.User{
+        Name:  data.Name,
+        Email: data.Email,
+    }
+}
+
+// ✅ REQUIRED - app/transformers/post_transformer.go
+package transformers
+
+import (
+    "goravel/app/models"
+    "goravel/app/dto"
+)
+
+type PostTransformer struct {
+}
+
+func NewPostTransformer() *PostTransformer {
+    return &PostTransformer{}
+}
+
+func (t *PostTransformer) ToDTO(post *models.Post) dto.PostDTO {
+    return dto.PostDTO{
+        ID:      post.ID,
+        Title:   post.Title,
+        Content: post.Content,
+    }
+}
+```
+
+## DTO Separation
+
+### Single DTO Per File
+```go
+// ✅ REQUIRED - app/dto/user_dto.go
+package dto
+
+type CreateUserDTO struct {
+    Name  string `json:"name" validate:"required"`
+    Email string `json:"email" validate:"required,email"`
+}
+
+type UpdateUserDTO struct {
+    Name  string `json:"name"`
+    Email string `json:"email" validate:"email"`
+}
+
+type UserDTO struct {
+    ID    uint   `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+// ✅ REQUIRED - app/dto/post_dto.go
+package dto
+
+type CreatePostDTO struct {
+    Title   string `json:"title" validate:"required"`
+    Content string `json:"content" validate:"required"`
+    UserID  uint   `json:"user_id" validate:"required"`
+}
+
+type PostDTO struct {
+    ID      uint   `json:"id"`
+    Title   string `json:"title"`
+    Content string `json:"content"`
+    UserID  uint   `json:"user_id"`
+}
+```
+
+## Interface Separation
+
+### Single Interface Per File
+```go
+// ✅ REQUIRED - app/interfaces/user_interface.go
+package interfaces
+
+import (
+    "goravel/app/models"
+    "goravel/app/dto"
+)
+
+type UserRepositoryInterface interface {
+    FindByID(id uint) (*models.User, error)
+    Create(user *models.User) error
+    Update(user *models.User) error
+    Delete(id uint) error
+}
+
+type UserServiceInterface interface {
+    CreateUser(data dto.CreateUserDTO) (*models.User, error)
+    GetUser(id uint) (*models.User, error)
+    UpdateUser(id uint, data dto.UpdateUserDTO) (*models.User, error)
+    DeleteUser(id uint) error
+}
+
+// ✅ REQUIRED - app/interfaces/post_interface.go
+package interfaces
+
+import (
+    "goravel/app/models"
+    "goravel/app/dto"
+)
+
+type PostRepositoryInterface interface {
+    FindByID(id uint) (*models.Post, error)
+    FindByUserID(userID uint) ([]*models.Post, error)
+    Create(post *models.Post) error
+    Update(post *models.Post) error
+    Delete(id uint) error
+}
+```
+
+## Exception Separation
+
+### Single Exception Per File
+```go
+// ✅ REQUIRED - app/exceptions/user_exception.go
+package exceptions
+
+import "errors"
+
+var (
+    UserNotFoundError     = errors.New("user not found")
+    UserAlreadyExistsError = errors.New("user already exists")
+    InvalidUserDataError   = errors.New("invalid user data")
+)
+
+// ✅ REQUIRED - app/exceptions/post_exception.go
+package exceptions
+
+import "errors"
+
+var (
+    PostNotFoundError     = errors.New("post not found")
+    PostAccessDeniedError = errors.New("post access denied")
+    InvalidPostDataError  = errors.New("invalid post data")
+)
+```
+
+## Utility Separation
+
+### Single Utility Per File
+```go
+// ✅ REQUIRED - app/utils/date_utils.go
+package utils
+
+import "time"
+
+type DateUtils struct {
+}
+
+func NewDateUtils() *DateUtils {
+    return &DateUtils{}
+}
+
+func (u *DateUtils) FormatDate(date time.Time) string {
+    return date.Format("2006-01-02")
+}
+
+func (u *DateUtils) ParseDate(dateString string) (time.Time, error) {
+    return time.Parse("2006-01-02", dateString)
+}
+
+// ✅ REQUIRED - app/utils/string_utils.go
+package utils
+
+import "strings"
+
+type StringUtils struct {
+}
+
+func NewStringUtils() *StringUtils {
+    return &StringUtils{}
+}
+
+func (u *StringUtils) Capitalize(str string) string {
+    return strings.Title(strings.ToLower(str))
+}
+
+func (u *StringUtils) Slugify(str string) string {
+    return strings.ToLower(strings.ReplaceAll(str, " ", "-"))
+}
+```
+
+## Configuration Separation
+
+### Single Configuration Per File
+```go
+// ✅ REQUIRED - config/database.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("database", map[string]interface{}{
+        "default": config.Env("DB_CONNECTION", "mysql"),
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "goravel"),
+                "username": config.Env("DB_USERNAME", "root"),
+                "password": config.Env("DB_PASSWORD", ""),
+            },
+        },
+    })
+}
+
+// ✅ REQUIRED - config/cache.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("cache", map[string]interface{}{
+        "default": config.Env("CACHE_STORE", "memory"),
+        "stores": map[string]any{
+            "memory": map[string]any{
+                "driver": "memory",
+            },
+        },
+    })
+}
+```
+
+## Service Provider Separation
+
+### Single Service Provider Per File
+```go
+// ✅ REQUIRED - app/providers/user_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/contracts/foundation"
+    "goravel/app/repositories"
+    "goravel/app/services"
+    "goravel/app/interfaces"
+)
+
+type UserServiceProvider struct {
+}
+
+func (p *UserServiceProvider) Register(app foundation.Application) {
+    // Register user repository
+    app.Bind(interfaces.UserRepositoryInterface{}, func(app foundation.Application) (any, error) {
+        return repositories.NewUserRepository(), nil
+    })
+    
+    // Register user service
+    app.Bind(interfaces.UserServiceInterface{}, func(app foundation.Application) (any, error) {
+        userRepo := app.Make(interfaces.UserRepositoryInterface{}).(interfaces.UserRepositoryInterface)
+        return services.NewUserService(userRepo), nil
+    })
+}
+
+func (p *UserServiceProvider) Boot(app foundation.Application) {
+    // Boot logic
+}
+
+// ✅ REQUIRED - app/providers/post_service_provider.go
+package providers
+
+import (
+    "github.com/goravel/framework/contracts/foundation"
+    "goravel/app/repositories"
+    "goravel/app/services"
+    "goravel/app/interfaces"
+)
+
+type PostServiceProvider struct {
+}
+
+func (p *PostServiceProvider) Register(app foundation.Application) {
+    // Register post repository
+    app.Bind(interfaces.PostRepositoryInterface{}, func(app foundation.Application) (any, error) {
+        return repositories.NewPostRepository(), nil
+    })
+    
+    // Register post service
+    app.Bind(interfaces.PostServiceInterface{}, func(app foundation.Application) (any, error) {
+        postRepo := app.Make(interfaces.PostRepositoryInterface{}).(interfaces.PostRepositoryInterface)
+        return services.NewPostService(postRepo), nil
+    })
+}
+```
+
+## Testing Separation
+
+### Single Test Per File
+```go
+// ✅ REQUIRED - tests/unit/services/user_service_test.go
+package services
+
+import (
+    "testing"
+    "goravel/app/services"
+    "goravel/app/dto"
+)
+
+func TestUserService_CreateUser(t *testing.T) {
+    // Test implementation
+}
+
+func TestUserService_GetUser(t *testing.T) {
+    // Test implementation
+}
+
+// ✅ REQUIRED - tests/unit/repositories/user_repository_test.go
+package repositories
+
+import (
+    "testing"
+    "goravel/app/repositories"
+)
+
+func TestUserRepository_FindByID(t *testing.T) {
+    // Test implementation
+}
+
+func TestUserRepository_Create(t *testing.T) {
+    // Test implementation
+}
+```
+
+## File Naming Conventions
+
+### Required Naming Patterns
+- **Models**: `{entity}.go` (e.g., `user.go`, `post.go`)
+- **Services**: `{entity}_service.go` (e.g., `user_service.go`)
+- **Repositories**: `{entity}_repository.go` (e.g., `user_repository.go`)
+- **Controllers**: `{entity}_controller.go` (e.g., `user_controller.go`)
+- **Middleware**: `{purpose}_middleware.go` (e.g., `auth_middleware.go`)
+- **Validators**: `{entity}_validator.go` (e.g., `user_validator.go`)
+- **Transformers**: `{entity}_transformer.go` (e.g., `user_transformer.go`)
+- **DTOs**: `{entity}_dto.go` (e.g., `user_dto.go`)
+- **Interfaces**: `{entity}_interface.go` (e.g., `user_interface.go`)
+- **Exceptions**: `{entity}_exception.go` (e.g., `user_exception.go`)
+
+## Enforcement Guidelines
+
+### Code Review Checklist
+- [ ] Each struct is in its own file
+- [ ] Each service is in its own file
+- [ ] Each repository is in its own file
+- [ ] Each controller is in its own file
+- [ ] Each middleware is in its own file
+- [ ] Each validator is in its own file
+- [ ] Each transformer is in its own file
+- [ ] Each DTO is in its own file
+- [ ] Each interface is in its own file
+- [ ] Each exception is in its own file
+- [ ] Each utility is in its own file
+- [ ] Each configuration is in its own file
+- [ ] Each service provider is in its own file
+- [ ] Each test is in its own file
+
+### Development Rules
+1. **NEVER** put multiple structs in one file
+2. **NEVER** put multiple services in one file
+3. **NEVER** put multiple repositories in one file
+4. **NEVER** put multiple controllers in one file
+5. **ALWAYS** create separate files for each responsibility
+6. **ALWAYS** use descriptive file names
+7. **ALWAYS** follow naming conventions
+8. **ALWAYS** organize files in appropriate directories
+
+### Benefits of File Separation
+- **Maintainability**: Easier to find and modify specific functionality
+- **Testability**: Easier to test individual components
+- **Reusability**: Components can be reused across different parts of the application
+- **Collaboration**: Multiple developers can work on different files simultaneously
+- **Debugging**: Easier to debug specific functionality
+- **Code Review**: Easier to review changes in specific areas
+
+## Best Practices
+
+### File Organization
+- **Logical Grouping**: Group related files in appropriate directories
+- **Clear Naming**: Use clear, descriptive names for all files
+- **Consistent Structure**: Maintain consistent file structure across the application
+- **Documentation**: Document the purpose of each file
+
+### Performance
+- **Lazy Loading**: Files are loaded only when needed
+- **Memory Efficiency**: Smaller files use less memory
+- **Compilation Speed**: Faster compilation with smaller files
+- **IDE Performance**: Better IDE performance with smaller files
+
+### Security
+- **Access Control**: Easier to implement access control per file
+- **Audit Trail**: Easier to track changes per file
+- **Code Review**: Easier to review security-sensitive code
+- **Dependency Management**: Clearer dependency relationships
+
+### Reliability
+- **Error Isolation**: Errors are isolated to specific files
+- **Testing**: Easier to test individual components
+- **Debugging**: Easier to debug specific functionality
+- **Maintenance**: Easier to maintain and update specific functionality

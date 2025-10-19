@@ -1,0 +1,886 @@
+---
+alwaysApply: true
+---
+
+# Goravel Authentication System
+
+Based on the [official Goravel authentication documentation](https://www.goravel.dev/security/authentication.html).
+
+## Authentication Overview
+
+### Introduction
+- **Indispensable Feature**: Authentication is an indispensable feature in Web Applications
+- **JWT and Session Support**: Goravel's `facades.Auth()` module provides support for JWT and Session drivers
+- **Customizable**: You can customize the driver and user provider
+- **Framework Integration**: Tightly integrated with Goravel's core systems
+
+### Key Concepts
+- **Auth Facade**: Access authentication functionality through `facades.Auth()`
+- **JWT Tokens**: JSON Web Tokens for stateless authentication
+- **Session Authentication**: Traditional session-based authentication
+- **Multiple Guards**: Support for different authentication contexts
+- **Custom Drivers**: Extensible authentication system
+
+## Configuration
+
+### Authentication Configuration
+```go
+// config/auth.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("auth", map[string]interface{}{
+        // Authentication Configuration
+        //
+        // Configure the default authentication guard
+        "defaults": map[string]any{
+            "guard": "user",
+        },
+
+        // Configure authentication guards
+        "guards": map[string]any{
+            "user": map[string]any{
+                "driver":   "jwt",
+                "provider": "users",
+                "ttl":      60,        // Token time-to-live in minutes
+                "refresh_ttl": 0,     // Refresh token time-to-live
+                "secret":  "your-secret", // JWT secret key
+            },
+            "admin": map[string]any{
+                "driver":   "jwt",
+                "provider": "admins",
+                "ttl":      120,       // Different TTL for admin
+                "refresh_ttl": 7,     // 7 days refresh TTL
+                "secret":  "admin-secret",
+            },
+            "api": map[string]any{
+                "driver":   "jwt",
+                "provider": "users",
+                "ttl":      1440,     // 24 hours
+                "refresh_ttl": 30,    // 30 days
+                "secret":  "api-secret",
+            },
+        },
+
+        // Configure user providers
+        "providers": map[string]any{
+            "users": map[string]any{
+                "driver": "orm",
+                "model":  "goravel/app/models/User",
+            },
+            "admins": map[string]any{
+                "driver": "orm",
+                "model":  "goravel/app/models/Admin",
+            },
+        },
+    })
+}
+```
+
+### JWT Configuration
+```go
+// config/jwt.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+    "time"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("jwt", map[string]interface{}{
+        // JWT Configuration
+        //
+        // JWT secret key
+        "secret": config.GetString("JWT_SECRET"),
+
+        // Token time-to-live
+        "ttl": config.GetDuration("JWT_TTL", 60*time.Minute),
+
+        // Refresh token time-to-live
+        "refresh_ttl": config.GetDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
+
+        // JWT algorithm
+        "algorithm": "HS256",
+    })
+}
+```
+
+### Environment Variables
+```bash
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-key
+JWT_TTL=60m
+JWT_REFRESH_TTL=168h
+```
+
+### Different JWT Guard Configurations
+```go
+// Each guard can have different JWT settings
+"guards": map[string]any{
+    "user": map[string]any{
+        "driver": "jwt",
+        "ttl": 60,           // 1 hour
+        "refresh_ttl": 0,    // No refresh
+        "secret": "user-secret",
+    },
+    "admin": map[string]any{
+        "driver": "jwt",
+        "ttl": 120,          // 2 hours
+        "refresh_ttl": 7,    // 7 days
+        "secret": "admin-secret",
+    },
+    "api": map[string]any{
+        "driver": "jwt",
+        "ttl": 1440,         // 24 hours
+        "refresh_ttl": 30,   // 30 days
+        "secret": "api-secret",
+    },
+}
+```
+
+## Generate JWT Token
+
+### Generate JWT Secret
+```bash
+# Generate JWT secret using Artisan command
+go run . artisan jwt:secret
+```
+
+### Generate Token Using User Model
+```go
+// User model with proper primary key configuration
+type User struct {
+    ID   uint   `gorm:"primaryKey"`
+    Name string
+    Email string
+}
+
+// Generate token using user model
+var user models.User
+user.ID = 1
+user.Name = "John Doe"
+user.Email = "john@example.com"
+
+token, err := facades.Auth(ctx).Login(&user)
+if err != nil {
+    // Handle error
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to generate token",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "token": token,
+    "user":  user,
+})
+```
+
+### Generate Token Using ID
+```go
+// Generate token using user ID
+token, err := facades.Auth(ctx).LoginUsingID(1)
+if err != nil {
+    // Handle error
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to generate token",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "token": token,
+})
+```
+
+### Token Generation with Custom Claims
+```go
+// Generate token with additional claims
+func generateTokenWithClaims(user *models.User, claims map[string]interface{}) (string, error) {
+    // Set additional claims
+    for key, value := range claims {
+        facades.Auth(ctx).SetClaim(key, value)
+    }
+    
+    return facades.Auth(ctx).Login(user)
+}
+
+// Usage
+token, err := generateTokenWithClaims(&user, map[string]interface{}{
+    "role": "admin",
+    "permissions": []string{"read", "write", "delete"},
+})
+```
+
+## Parse Token
+
+### Basic Token Parsing
+```go
+// Parse JWT token
+payload, err := facades.Auth(ctx).Parse(token)
+if err != nil {
+    // Handle parsing error
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Invalid token",
+    })
+}
+
+// Access payload information
+guard := payload.Guard      // Current Guard
+key := payload.Key          // User flag
+expireAt := payload.ExpireAt // Expire time
+issuedAt := payload.IssuedAt // Issued time
+```
+
+### Token Expiration Handling
+```go
+import (
+    "errors"
+    "github.com/goravel/framework/auth"
+)
+
+// Parse token with expiration check
+payload, err := facades.Auth(ctx).Parse(token)
+if err != nil {
+    if errors.Is(err, auth.ErrorTokenExpired) {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Token has expired",
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Invalid token",
+    })
+}
+
+// Token is valid
+return ctx.Response().Success().Json(http.Json{
+    "message": "Token is valid",
+    "user_id": payload.Key,
+})
+```
+
+### Bearer Token Handling
+```go
+// Handle Bearer token (with or without prefix)
+func extractTokenFromHeader(ctx http.Context) string {
+    authHeader := ctx.Request().Header("Authorization")
+    if authHeader == "" {
+        return ""
+    }
+    
+    // Remove "Bearer " prefix if present
+    if strings.HasPrefix(authHeader, "Bearer ") {
+        return strings.TrimPrefix(authHeader, "Bearer ")
+    }
+    
+    return authHeader
+}
+
+// Usage
+token := extractTokenFromHeader(ctx)
+if token == "" {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Authorization header required",
+    })
+}
+
+payload, err := facades.Auth(ctx).Parse(token)
+```
+
+## Get User
+
+### Get User by Token
+```go
+// Get user from token (must call Parse first)
+var user models.User
+err := facades.Auth(ctx).User(&user) // Must use pointer
+if err != nil {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Failed to get user",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "user": user,
+})
+```
+
+### Get User ID
+```go
+// Get user ID from token
+id, err := facades.Auth(ctx).ID()
+if err != nil {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Failed to get user ID",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "user_id": id,
+})
+```
+
+### Authentication Middleware
+```go
+// Authentication middleware
+func AuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Extract token from header
+        token := extractTokenFromHeader(ctx)
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Parse token
+        _, err := facades.Auth(ctx).Parse(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        // Continue to next middleware/handler
+        ctx.Next()
+    }
+}
+```
+
+## Refresh Token
+
+### Refresh JWT Token
+```go
+// Refresh token (must call Parse first)
+token, err := facades.Auth(ctx).Refresh()
+if err != nil {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Failed to refresh token",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "token": token,
+})
+```
+
+### Refresh Token with Validation
+```go
+// Refresh token with additional validation
+func refreshToken(ctx http.Context) http.Response {
+    // Check if token is valid
+    payload, err := facades.Auth(ctx).Parse(extractTokenFromHeader(ctx))
+    if err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid token",
+        })
+    }
+    
+    // Check if user still exists
+    var user models.User
+    err = facades.Auth(ctx).User(&user)
+    if err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Generate new token
+    newToken, err := facades.Auth(ctx).Refresh()
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to refresh token",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "token": newToken,
+        "user":  user,
+    })
+}
+```
+
+## Logout
+
+### Basic Logout
+```go
+// Logout user
+err := facades.Auth(ctx).Logout()
+if err != nil {
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to logout",
+    })
+}
+
+return ctx.Response().Success().Json(http.Json{
+    "message": "Logged out successfully",
+})
+```
+
+### Logout with Token Invalidation
+```go
+// Logout with token invalidation
+func logout(ctx http.Context) http.Response {
+    // Parse token to get user info
+    payload, err := facades.Auth(ctx).Parse(extractTokenFromHeader(ctx))
+    if err != nil {
+        return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+            "error": "Invalid token",
+        })
+    }
+    
+    // Logout user
+    err = facades.Auth(ctx).Logout()
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to logout",
+        })
+    }
+    
+    // Log logout event
+    facades.Log().Info("User logged out", map[string]any{
+        "user_id": payload.Key,
+        "guard":   payload.Guard,
+    })
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "Logged out successfully",
+    })
+}
+```
+
+## Multiple Guards
+
+### Using Different Guards
+```go
+// Login using admin guard
+token, err := facades.Auth(ctx).Guard("admin").LoginUsingID(1)
+if err != nil {
+    return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+        "error": "Failed to generate admin token",
+    })
+}
+
+// Parse token using admin guard
+err = facades.Auth(ctx).Guard("admin").Parse(token)
+if err != nil {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Invalid admin token",
+    })
+}
+
+// Get admin user
+var admin models.Admin
+err = facades.Auth(ctx).Guard("admin").User(&admin)
+if err != nil {
+    return ctx.Response().Json(http.StatusUnauthorized, http.Json{
+        "error": "Failed to get admin user",
+    })
+}
+```
+
+### Guard-Specific Middleware
+```go
+// Admin authentication middleware
+func AdminAuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        token := extractTokenFromHeader(ctx)
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Use admin guard
+        _, err := facades.Auth(ctx).Guard("admin").Parse(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid admin token",
+            })
+            return
+        }
+        
+        ctx.Next()
+    }
+}
+
+// API authentication middleware
+func APIAuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        token := extractTokenFromHeader(ctx)
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Use API guard
+        _, err := facades.Auth(ctx).Guard("api").Parse(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid API token",
+            })
+            return
+        }
+        
+        ctx.Next()
+    }
+}
+```
+
+### Dynamic Guard Selection
+```go
+// Select guard based on request
+func selectGuard(ctx http.Context) string {
+    path := ctx.Request().Path()
+    
+    if strings.HasPrefix(path, "/admin") {
+        return "admin"
+    } else if strings.HasPrefix(path, "/api") {
+        return "api"
+    }
+    
+    return "user" // default guard
+}
+
+// Dynamic authentication middleware
+func DynamicAuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        guard := selectGuard(ctx)
+        token := extractTokenFromHeader(ctx)
+        
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        _, err := facades.Auth(ctx).Guard(guard).Parse(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        ctx.Next()
+    }
+}
+```
+
+## Custom Driver
+
+### Add Custom Guard
+```go
+import (
+    "github.com/goravel/framework/contracts/auth"
+    "github.com/goravel/framework/contracts/http"
+    "github.com/goravel/framework/facades"
+)
+
+// Custom guard implementation
+type CustomGuard struct {
+    // Custom guard fields
+}
+
+func (g *CustomGuard) Login(user interface{}) (string, error) {
+    // Custom login logic
+    return "custom-token", nil
+}
+
+func (g *CustomGuard) LoginUsingID(id interface{}) (string, error) {
+    // Custom login using ID logic
+    return "custom-token", nil
+}
+
+func (g *CustomGuard) Parse(token string) (*auth.Payload, error) {
+    // Custom token parsing logic
+    return &auth.Payload{
+        Guard:    "custom",
+        Key:      "user-id",
+        ExpireAt: time.Now().Add(time.Hour),
+        IssuedAt: time.Now(),
+    }, nil
+}
+
+func (g *CustomGuard) User(user interface{}) error {
+    // Custom user retrieval logic
+    return nil
+}
+
+func (g *CustomGuard) ID() (interface{}, error) {
+    // Custom ID retrieval logic
+    return "user-id", nil
+}
+
+func (g *CustomGuard) Refresh() (string, error) {
+    // Custom token refresh logic
+    return "new-custom-token", nil
+}
+
+func (g *CustomGuard) Logout() error {
+    // Custom logout logic
+    return nil
+}
+
+// Register custom guard
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    facades.Auth().Extend("custom-driver", func(ctx http.Context, name string, userProvider auth.UserProvider) (auth.GuardDriver, error) {
+        return &CustomGuard{}, nil
+    })
+}
+```
+
+### Add Custom UserProvider
+```go
+// Custom user provider implementation
+type CustomUserProvider struct {
+    // Custom provider fields
+}
+
+func (p *CustomUserProvider) RetrieveByID(id interface{}) (interface{}, error) {
+    // Custom user retrieval by ID
+    return &models.User{ID: id.(uint)}, nil
+}
+
+func (p *CustomUserProvider) RetrieveByToken(id interface{}, token string) (interface{}, error) {
+    // Custom user retrieval by token
+    return &models.User{ID: id.(uint)}, nil
+}
+
+func (p *CustomUserProvider) UpdateRememberToken(user interface{}, token string) error {
+    // Custom remember token update
+    return nil
+}
+
+// Register custom user provider
+func (receiver *AuthServiceProvider) Boot(app foundation.Application) {
+    facades.Auth().Provider("custom-provider", func(ctx http.Context) (auth.UserProvider, error) {
+        return &CustomUserProvider{}, nil
+    })
+}
+```
+
+### Custom Driver Configuration
+```go
+// config/auth.go - Custom driver configuration
+"guards": map[string]any{
+    "custom": map[string]any{
+        "driver":   "custom-driver",
+        "provider": "custom-provider",
+    },
+},
+
+"providers": map[string]any{
+    "custom-provider": map[string]any{
+        "driver": "custom-provider",
+    },
+},
+```
+
+## Advanced Authentication Patterns
+
+### Token Blacklisting
+```go
+// Token blacklist implementation
+type TokenBlacklist struct {
+    tokens map[string]bool
+    mutex  sync.RWMutex
+}
+
+func (tb *TokenBlacklist) Add(token string) {
+    tb.mutex.Lock()
+    defer tb.mutex.Unlock()
+    tb.tokens[token] = true
+}
+
+func (tb *TokenBlacklist) IsBlacklisted(token string) bool {
+    tb.mutex.RLock()
+    defer tb.mutex.RUnlock()
+    return tb.tokens[token]
+}
+
+// Custom guard with blacklist
+type BlacklistGuard struct {
+    blacklist *TokenBlacklist
+}
+
+func (g *BlacklistGuard) Parse(token string) (*auth.Payload, error) {
+    if g.blacklist.IsBlacklisted(token) {
+        return nil, errors.New("token is blacklisted")
+    }
+    
+    // Parse token normally
+    return g.parseToken(token)
+}
+
+func (g *BlacklistGuard) Logout() error {
+    // Add token to blacklist
+    token := g.getCurrentToken()
+    g.blacklist.Add(token)
+    return nil
+}
+```
+
+### Multi-Factor Authentication
+```go
+// MFA implementation
+type MFAGuard struct {
+    // MFA fields
+}
+
+func (g *MFAGuard) Login(user interface{}) (string, error) {
+    // Check if MFA is required
+    if g.requiresMFA(user) {
+        // Generate MFA challenge
+        challenge := g.generateMFAChallenge(user)
+        return "", errors.New("MFA required: " + challenge)
+    }
+    
+    // Normal login
+    return g.generateToken(user)
+}
+
+func (g *MFAGuard) VerifyMFA(user interface{}, code string) (string, error) {
+    if !g.verifyMFACode(user, code) {
+        return "", errors.New("invalid MFA code")
+    }
+    
+    return g.generateToken(user)
+}
+```
+
+### Rate Limiting for Authentication
+```go
+// Rate limiting for login attempts
+type RateLimitedAuth struct {
+    attempts map[string]int
+    mutex    sync.RWMutex
+}
+
+func (rla *RateLimitedAuth) CheckRateLimit(identifier string) bool {
+    rla.mutex.Lock()
+    defer rla.mutex.Unlock()
+    
+    attempts := rla.attempts[identifier]
+    if attempts >= 5 { // Max 5 attempts
+        return false
+    }
+    
+    rla.attempts[identifier]++
+    return true
+}
+
+func (rla *RateLimitedAuth) ResetRateLimit(identifier string) {
+    rla.mutex.Lock()
+    defer rla.mutex.Unlock()
+    delete(rla.attempts, identifier)
+}
+```
+
+## Authentication Best Practices
+
+### Design Principles
+- **Security First**: Implement proper security measures for authentication
+- **Token Management**: Handle token lifecycle properly (creation, validation, refresh, revocation)
+- **Error Handling**: Provide clear error messages without exposing sensitive information
+- **Rate Limiting**: Implement rate limiting to prevent brute force attacks
+
+### Security Considerations
+- **Token Security**: Use secure token generation and validation
+- **HTTPS Only**: Always use HTTPS for authentication endpoints
+- **Input Validation**: Validate all authentication inputs
+- **Audit Logging**: Log authentication events for security auditing
+
+### Performance Considerations
+- **Token Caching**: Cache validated tokens to reduce database queries
+- **Connection Pooling**: Use connection pooling for database operations
+- **Async Operations**: Use async operations for non-critical authentication tasks
+- **Monitoring**: Monitor authentication performance and errors
+
+## Development Guidelines
+
+### Authentication Organization
+- **Middleware**: Use middleware for authentication checks
+- **Guards**: Use different guards for different user types
+- **Providers**: Implement custom providers for complex user retrieval
+- **Testing**: Mock authentication for testing
+
+### Testing Authentication
+```go
+// Test authentication functionality
+func TestAuthentication(t *testing.T) {
+    // Test token generation
+    user := &models.User{ID: 1, Name: "Test User"}
+    token, err := facades.Auth(ctx).Login(user)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, token)
+    
+    // Test token parsing
+    payload, err := facades.Auth(ctx).Parse(token)
+    assert.NoError(t, err)
+    assert.Equal(t, "1", payload.Key)
+    
+    // Test user retrieval
+    var retrievedUser models.User
+    err = facades.Auth(ctx).User(&retrievedUser)
+    assert.NoError(t, err)
+    assert.Equal(t, user.ID, retrievedUser.ID)
+}
+
+// Test custom guard
+func TestCustomGuard(t *testing.T) {
+    guard := &CustomGuard{}
+    
+    token, err := guard.LoginUsingID(1)
+    assert.NoError(t, err)
+    assert.NotEmpty(t, token)
+    
+    payload, err := guard.Parse(token)
+    assert.NoError(t, err)
+    assert.NotNil(t, payload)
+}
+```
+
+### Monitoring and Maintenance
+- **Authentication Metrics**: Monitor authentication success/failure rates
+- **Token Usage**: Track token usage patterns
+- **Security Events**: Monitor security-related events
+- **Performance**: Monitor authentication performance
+
+## Best Practices
+
+### Authentication Design
+- **Consistent API**: Use consistent patterns for all authentication operations
+- **Error Handling**: Handle all authentication errors gracefully
+- **Security**: Implement comprehensive security measures
+- **Documentation**: Document authentication flows and security considerations
+
+### Security
+- **Token Security**: Use secure token generation and validation
+- **Input Validation**: Validate all authentication inputs
+- **Rate Limiting**: Implement rate limiting for authentication endpoints
+- **Audit Logging**: Log all authentication events
+
+### Performance
+- **Token Caching**: Cache validated tokens appropriately
+- **Database Optimization**: Optimize user retrieval queries
+- **Async Operations**: Use async operations where appropriate
+- **Monitoring**: Monitor authentication performance
+
+### Reliability
+- **Error Handling**: Handle all authentication errors
+- **Fallback Mechanisms**: Implement fallback mechanisms for authentication failures
+- **Testing**: Test authentication thoroughly
+- **Monitoring**: Monitor authentication system health

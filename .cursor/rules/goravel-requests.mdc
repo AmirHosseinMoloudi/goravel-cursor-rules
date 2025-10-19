@@ -1,0 +1,368 @@
+---
+alwaysApply: true
+---
+
+# Goravel HTTP Requests
+
+Based on the [official Goravel HTTP requests documentation](https://www.goravel.dev/the-basics/request.html).
+
+## Request Overview
+
+### Introduction
+- **Request Processing**: The `contracts/http/Request` method interacts with current HTTP requests
+- **Input Handling**: Get input and files submitted with requests
+- **Context Injection**: `http.Context` instance is automatically injected into controllers
+- **Data Access**: Access request data, headers, files, and cookies
+
+### Key Concepts
+- **Request Context**: `http.Context` provides access to request data
+- **Input Priority**: JSON, form, and query data (priority from front to back)
+- **Type Safety**: Type-specific methods for different data types
+- **File Handling**: Upload and process files from requests
+
+## Interacting With The Request
+
+### Basic Request Access
+```go
+import "github.com/goravel/framework/contracts/http"
+
+facades.Route().Get("/", func(ctx http.Context) {
+    // Access request data through ctx.Request()
+})
+```
+
+### Request Path Information
+```go
+// Get request path
+path := ctx.Request().Path() // /users/1
+
+// Get original route path
+originPath := ctx.Request().OriginPath() // /users/{id}
+```
+
+### Request URL Information
+```go
+// Get request URL with query parameters
+url := ctx.Request().Url() // /users?name=Goravel
+
+// Get request host
+host := ctx.Request().Host()
+
+// Get full request URL
+fullUrl := ctx.Request().FullUrl() // http://**/users?name=Goravel
+```
+
+### Request Method and Route Information
+```go
+// Get HTTP method
+method := ctx.Request().Method()
+
+// Get route information
+info := ctx.Request().Info()
+
+// Get route name
+name := ctx.Request().Name()
+```
+
+### Request Headers and IP
+```go
+// Get specific header with default value
+header := ctx.Request().Header("X-Header-Name", "default")
+
+// Get all headers
+headers := ctx.Request().Headers()
+
+// Get client IP address
+ip := ctx.Request().Ip()
+```
+
+## Input Data Handling
+
+### Retrieving All Input Data
+```go
+// Get all input data (JSON, form, query)
+data := ctx.Request().All()
+```
+
+### Route Parameters
+```go
+// Get route parameter
+id := ctx.Request().Route("id")
+
+// Get route parameter with type conversion
+id := ctx.Request().RouteInt("id")
+id := ctx.Request().RouteInt64("id")
+```
+
+### Query String Parameters
+```go
+// Get query parameter
+name := ctx.Request().Query("name")
+name := ctx.Request().Query("name", "default")
+
+// Get query parameter with type conversion
+id := ctx.Request().QueryInt("id")
+id := ctx.Request().QueryInt64("id")
+id := ctx.Request().QueryBool("id")
+
+// Get query arrays
+names := ctx.Request().QueryArray("names")
+
+// Get query maps
+names := ctx.Request().QueryMap("names")
+
+// Get all query parameters
+queries := ctx.Request().Queries()
+```
+
+### Input Values (JSON/Form)
+```go
+// Get input value (JSON, form priority)
+name := ctx.Request().Input("name")
+name := ctx.Request().Input("name", "goravel")
+
+// Get input with type conversion
+name := ctx.Request().InputInt("name")
+name := ctx.Request().InputInt64("name")
+name := ctx.Request().InputBool("name")
+
+// Get input arrays and maps
+names := ctx.Request().InputArray("name")
+names := ctx.Request().InputMap("name")
+names := ctx.Request().InputMapArray("name")
+```
+
+## Data Binding
+
+### Bind JSON/Form Data
+```go
+// Bind to struct
+type User struct {
+    Name string `form:"code" json:"code"`
+}
+
+var user User
+err := ctx.Request().Bind(&user)
+
+// Bind to map
+var user map[string]any
+err := ctx.Request().Bind(&user)
+```
+
+### Bind Query Data
+```go
+// Bind query parameters to struct
+type Test struct {
+    ID string `form:"id"`
+}
+
+var test Test
+err := ctx.Request().BindQuery(&test)
+```
+
+## Cookie Handling
+
+### Retrieving Cookie Values
+```go
+// Get cookie value
+value := ctx.Request().Cookie("name")
+
+// Get cookie value with default
+value := ctx.Request().Cookie("name", "default")
+```
+
+## File Handling
+
+### Retrieving Files
+```go
+// Get single file
+file, err := ctx.Request().File("file")
+
+// Get multiple files
+files, err := ctx.Request().Files("file")
+```
+
+### Saving Files
+```go
+// Save uploaded file
+file, err := ctx.Request().File("file")
+if err == nil {
+    err = file.Store("./public")
+}
+```
+
+## Context and Data Management
+
+### Origin Request
+```go
+// Get original request object
+request := ctx.Request().Origin()
+```
+
+### Context Data
+```go
+// Attach data to context
+ctx.WithValue("user", "Goravel")
+
+// Get data from context
+user := ctx.Value("user")
+
+// Get Go context
+goCtx := ctx.Context()
+```
+
+## Custom Recovery
+
+### Error Recovery Setup
+```go
+// app/providers/route_service_provider.go
+func (receiver *RouteServiceProvider) Boot(app foundation.Application) {
+    // Add HTTP middleware
+    facades.Route().GlobalMiddleware(http.Kernel{}.Middleware()...)
+    
+    // Set custom recovery
+    facades.Route().Recover(func(ctx http.Context, err error) {
+        ctx.Request().Abort()
+        // or
+        // ctx.Response().String(500, "Internal Server Error").Abort()
+    })
+}
+```
+
+## Common Request Patterns
+
+### Input Validation
+```go
+func (c *UserController) Store(ctx http.Context) http.Response {
+    // Get all input data
+    data := ctx.Request().All()
+    
+    // Validate required fields
+    if name, ok := data["name"].(string); !ok || name == "" {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Name is required",
+        })
+    }
+    
+    // Process data
+    return ctx.Response().Success().Json(http.Json{
+        "message": "User created",
+    })
+}
+```
+
+### Route Parameter Handling
+```go
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Get route parameter
+    id := ctx.Request().RouteInt("id")
+    if id == 0 {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid ID",
+        })
+    }
+    
+    // Process with ID
+    return ctx.Response().Success().Json(http.Json{
+        "id": id,
+    })
+}
+```
+
+### Query Parameter Processing
+```go
+func (c *UserController) Index(ctx http.Context) http.Response {
+    // Get pagination parameters
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    // Get search parameters
+    search := ctx.Request().Query("search", "")
+    
+    // Process with parameters
+    return ctx.Response().Success().Json(http.Json{
+        "page":   page,
+        "limit":  limit,
+        "search": search,
+    })
+}
+```
+
+### File Upload Handling
+```go
+func (c *FileController) Upload(ctx http.Context) http.Response {
+    // Get uploaded file
+    file, err := ctx.Request().File("file")
+    if err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "No file uploaded",
+        })
+    }
+    
+    // Save file
+    err = file.Store("./public/uploads")
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to save file",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "message": "File uploaded successfully",
+    })
+}
+```
+
+## Request Best Practices
+
+### Input Validation
+- **Validate All Inputs**: Always validate input data before processing
+- **Type Safety**: Use type-specific methods for data conversion
+- **Default Values**: Provide default values for optional parameters
+- **Error Handling**: Handle validation errors gracefully
+
+### Security Considerations
+- **Input Sanitization**: Sanitize user inputs before processing
+- **File Validation**: Validate file types and sizes
+- **Header Validation**: Validate and sanitize headers
+- **CSRF Protection**: Implement CSRF protection for forms
+
+### Performance Optimization
+- **Efficient Parsing**: Use appropriate parsing methods
+- **Memory Management**: Handle large files efficiently
+- **Caching**: Cache frequently accessed request data
+- **Streaming**: Use streaming for large file uploads
+
+## Development Guidelines
+
+### Request Organization
+- **Clear Structure**: Organize request handling logic clearly
+- **Error Handling**: Implement consistent error handling
+- **Logging**: Log important request information
+- **Documentation**: Document request parameters and responses
+
+### Testing Requests
+- **Unit Testing**: Test request handling logic
+- **Integration Testing**: Test with real HTTP requests
+- **Mock Requests**: Mock request objects for testing
+- **Edge Cases**: Test edge cases and error conditions
+
+## Best Practices
+
+### Request Design
+- **Consistent API**: Design consistent request/response patterns
+- **Validation**: Implement comprehensive input validation
+- **Error Messages**: Provide clear error messages
+- **Documentation**: Document API endpoints and parameters
+
+### Security
+- **Input Validation**: Validate all inputs thoroughly
+- **File Security**: Implement secure file handling
+- **Header Security**: Validate and sanitize headers
+- **Rate Limiting**: Implement rate limiting for API endpoints
+
+### Performance
+- **Efficient Processing**: Optimize request processing
+- **Memory Usage**: Monitor memory usage for large requests
+- **Response Time**: Optimize response times
+- **Resource Management**: Properly manage resources

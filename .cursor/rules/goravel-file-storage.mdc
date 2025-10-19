@@ -1,0 +1,742 @@
+---
+alwaysApply: true
+---
+
+# Goravel File Storage System
+
+Based on the [official Goravel file storage documentation](https://www.goravel.dev/digging-deeper/filesystem.html).
+
+## File Storage Overview
+
+### Introduction
+- **Unified File System**: Goravel provides simple drivers for working with local filesystems, Amazon S3, Aliyun OSS, Tencent COS, Minio and Cloudinary
+- **API Consistency**: Switching between storage options is simple as the API remains the same for each system
+- **Multiple Drivers**: Support for local, cloud, and custom storage drivers
+- **Storage Facade**: Access storage functionality through `facades.Storage()`
+
+### Key Concepts
+- **Storage Facade**: Access storage functionality through `facades.Storage()`
+- **Storage Drivers**: Multiple drivers (local, S3, OSS, COS, Minio, Cloudinary, custom)
+- **File Management**: Upload, download, delete, and list files
+- **Path Management**: Handle file paths and directories
+
+### Available Drivers
+| Driver     | Link                                    |
+| ---------- | --------------------------------------- |
+| S3         | [github.com/goravel/s3](https://github.com/goravel/s3)         |
+| OSS        | [github.com/goravel/oss](https://github.com/goravel/oss)        |
+| COS        | [github.com/goravel/cos](https://github.com/goravel/cos)        |
+| Minio      | [github.com/goravel/minio](https://github.com/goravel/minio)      |
+| Cloudinary | [github.com/goravel/cloudinary](https://github.com/goravel/cloudinary) |
+
+## Configuration
+
+### Storage Configuration
+```go
+// config/filesystems.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("filesystems", map[string]interface{}{
+        // File Storage Configuration
+        //
+        // Configure the default filesystem disk
+        "default": config.Env("FILESYSTEM_DISK", "local"),
+
+        // Configure filesystem disks
+        "disks": map[string]any{
+            "local": map[string]any{
+                "driver": "local",
+                "root":   "storage/app",
+            },
+            "public": map[string]any{
+                "driver": "local",
+                "root":   "storage/app/public",
+                "url":    "storage",
+            },
+            "s3": map[string]any{
+                "driver": "s3",
+                "key":    config.Env("AWS_ACCESS_KEY_ID"),
+                "secret": config.Env("AWS_SECRET_ACCESS_KEY"),
+                "region": config.Env("AWS_DEFAULT_REGION"),
+                "bucket": config.Env("AWS_BUCKET"),
+            },
+            "custom": map[string]any{
+                "driver": "custom",
+                "via":    &CustomStorageDriver{},
+            },
+        },
+    })
+}
+```
+
+### The Local Driver
+- **Default Root**: All file operations are relative to the `root` directory defined in filesystems configuration
+- **Default Location**: By default, set to `storage/app` directory
+- **File Operations**: Operations like `facades.Storage().Put("example.txt", "Contents")` write to `storage/app/example.txt`
+
+### The Public Disk
+- **Public Access**: Intended for files that are going to be publicly accessible
+- **Default Location**: Uses `local` driver and stores files in `storage/app/public`
+- **Web Access**: Create file routing for web access:
+```go
+facades.Route().Static("storage", "./storage/app/public")
+```
+
+### Environment Variables
+```bash
+# Storage configuration
+FILESYSTEM_DISK=local
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=your-bucket-name
+```
+
+## Obtaining Disk Instances
+
+### Default Disk Operations
+```go
+// Use default disk automatically
+facades.Storage().Put("avatars/1.png", "Contents")
+```
+
+### Multiple Disk Operations
+```go
+// Work with specific disk
+facades.Storage().Disk("s3").Put("avatars/1.png", "Contents")
+```
+
+### Context Injection
+```go
+// Inject HTTP context into storage operations
+facades.Storage().WithContext(ctx).Put("avatars/1.png", "Contents")
+```
+
+## Retrieving Files
+
+### Basic File Retrieval
+```go
+// Get file content (raw string)
+contents := facades.Storage().Get("file.jpg")
+
+// Check if file exists
+if facades.Storage().Disk("s3").Exists("file.jpg") {
+    // File exists
+}
+
+// Check if file is missing
+if facades.Storage().Disk("s3").Missing("file.jpg") {
+    // File is missing
+}
+```
+
+### File URLs
+```go
+// Get file URL
+url := facades.Storage().Url("file.jpg")
+
+// Create temporary URLs (non-local drivers)
+url, err := facades.Storage().TemporaryUrl(
+    "file.jpg", time.Now().Add(5*time.Minute)
+)
+```
+
+### File Metadata
+```go
+// Get file size
+size := facades.Storage().Size("file.jpg")
+
+// Get last modified time
+time, err := facades.Storage().LastModified("file.jpg")
+
+// Get MIME type
+mime, err := facades.Storage().MimeType("file.jpg")
+
+// Get file path
+path := facades.Storage().Path("file.jpg")
+```
+
+### Using NewFile Method
+```go
+import "github.com/goravel/framework/filesystem"
+
+file, err := filesystem.NewFile("./logo.png")
+size, err := file.Size()
+lastModified, err := file.LastModified()
+mime, err := file.MimeType()
+```
+
+## Storing Files
+
+### Basic File Storage
+```go
+// Store file content
+err := facades.Storage().Put("file.jpg", contents)
+```
+
+### File Storage with PutFile
+```go
+import "github.com/goravel/framework/filesystem"
+
+// Automatically generate unique ID for filename
+file, err := filesystem.NewFile("./logo.png")
+path := facades.Storage().PutFile("photos", file)
+
+// Manually specify filename
+file, err := filesystem.NewFile("./logo.png")
+path := facades.Storage().PutFileAs("photos", file, "photo.jpg")
+```
+
+### Copying & Moving Files
+```go
+// Copy file to new location
+err := facades.Storage().Copy("old/file.jpg", "new/file.jpg")
+
+// Move/rename file
+err := facades.Storage().Move("old/file.jpg", "new/file.jpg")
+```
+
+## File Uploads
+
+### Basic File Upload
+```go
+func (r *UserController) Show(ctx http.Context) {
+    file, err := ctx.Request().File("avatar")
+    path, err := file.Store("avatars")
+}
+```
+
+### File Upload with PutFile
+```go
+import "github.com/goravel/framework/filesystem"
+
+file, err := filesystem.NewFile("./logo.png")
+path := facades.Storage().PutFile("photos", file)
+```
+
+### Specifying File Name
+```go
+// Store with specific filename
+file, err := ctx.Request().File("avatar")
+path, err := file.StoreAs("avatars", "name")
+
+// Using PutFileAs
+file, err := filesystem.NewFile("./logo.png")
+path := facades.Storage().PutFileAs("photos", file, "name")
+```
+
+### Specifying Disk
+```go
+func (r *UserController) Show(ctx http.Context) {
+    file, err := ctx.Request().File("avatar")
+    path, err := file.Disk("s3").Store("avatars")
+}
+```
+
+### Uploaded File Information
+```go
+file, err := ctx.Request().File("avatar")
+
+// Get original name and extension (unsafe)
+name := file.GetClientOriginalName()
+extension := file.GetClientOriginalExtension()
+
+// Get safe name and extension
+name := file.HashName() // Generate unique, random name
+extension, err := file.Extension() // Determine extension from MIME type
+```
+
+## Deleting Files
+
+### Single and Multiple File Deletion
+```go
+// Delete single file
+err := facades.Storage().Delete("file.jpg")
+
+// Delete multiple files
+err := facades.Storage().Delete("file.jpg", "file2.jpg")
+
+// Delete from specific disk
+err := facades.Storage().Disk("s3").Delete("file.jpg")
+```
+
+## Directories
+
+### Get All Files Within Directory
+```go
+// Get files in directory
+files, err := facades.Storage().Disk("s3").Files("directory")
+
+// Get all files recursively
+files, err := facades.Storage().Disk("s3").AllFiles("directory")
+```
+
+### Get All Directories Within Directory
+```go
+// Get directories in directory
+directories, err := facades.Storage().Disk("s3").Directories("directory")
+
+// Get all directories recursively
+directories, err := facades.Storage().Disk("s3").AllDirectories("directory")
+```
+
+### Create Directory
+```go
+// Create directory (including subdirectories)
+err := facades.Storage().MakeDirectory(directory)
+```
+
+### Delete Directory
+```go
+// Remove directory and all its files
+err := facades.Storage().DeleteDirectory(directory)
+```
+
+## Custom Filesystems
+
+### Introduction
+Goravel provides simple drivers for working with local filesystems, Amazon S3, Aliyun OSS, Tencent COS, Minio and Cloudinary. The API remains the same for each system, making it simple to switch between storage options.
+
+### Available Drivers
+| Driver | Link |
+|--------|------|
+| S3 | https://github.com/goravel/s3 |
+| OSS | https://github.com/goravel/oss |
+| COS | https://github.com/goravel/cos |
+| Minio | https://github.com/goravel/minio |
+| Cloudinary | https://github.com/goravel/cloudinary |
+
+### Local Driver
+When using the local driver, all file operations are relative to the root directory defined in your filesystems configuration file. By default, this value is set to the `storage/app` directory.
+
+```go
+// This would write to storage/app/example.txt
+facades.Storage().Put("example.txt", "Contents")
+```
+
+### Public Disk
+The `public` disk included in your application's filesystems configuration file is intended for files that are going to be publicly accessible. By default, the `public` disk uses the `local` driver and stores its files in `storage/app/public`.
+
+```go
+// Store file on public disk
+facades.Storage().Disk("public").Put("file.jpg", contents)
+```
+
+## File Storage Best Practices
+
+### Design Principles
+- **Security First**: Validate all file uploads and paths
+- **Performance**: Use appropriate storage drivers for your needs
+- **Scalability**: Consider cloud storage for large applications
+- **Backup**: Implement proper backup strategies
+
+### Performance Considerations
+- **CDN Integration**: Use CDN for static file delivery
+- **Caching**: Cache file metadata and URLs
+- **Compression**: Compress files when appropriate
+- **Streaming**: Use streaming for large files
+
+### Security Considerations
+- **File Validation**: Validate file types and sizes
+- **Path Security**: Prevent directory traversal attacks
+- **Access Control**: Implement proper file access control
+- **Virus Scanning**: Scan uploaded files for malware
+
+## Development Guidelines
+
+### File Organization
+- **Directory Structure**: Organize files in logical directories
+- **Naming Conventions**: Use consistent file naming
+- **Version Control**: Implement file versioning when needed
+- **Cleanup**: Implement automatic file cleanup
+
+### Testing File Storage
+```go
+func TestFileStorage(t *testing.T) {
+    // Test file storage operations
+    err := facades.Storage().Put("test.txt", "content")
+    assert.NoError(t, err)
+    
+    content := facades.Storage().Get("test.txt")
+    assert.Equal(t, "content", content)
+    
+    // Cleanup
+    facades.Storage().Delete("test.txt")
+}
+```
+
+### Monitoring and Maintenance
+- **Storage Usage**: Monitor storage usage and costs
+- **File Cleanup**: Implement automated cleanup processes
+- **Performance Monitoring**: Monitor file operation performance
+- **Error Tracking**: Track file operation errors
+
+## Best Practices
+
+### File Storage Design
+- **Appropriate Drivers**: Choose the right storage driver for your needs
+- **Security**: Implement comprehensive file security
+- **Performance**: Optimize file operations for performance
+- **Scalability**: Design for future growth
+
+### Security
+- **Input Validation**: Validate all file inputs
+- **Path Security**: Secure file paths and prevent traversal
+- **Access Control**: Implement proper access control
+- **File Scanning**: Scan files for security threats
+
+### Performance
+- **Efficient Operations**: Optimize file operations
+- **Caching**: Cache file metadata and URLs
+- **CDN Usage**: Use CDN for static file delivery
+- **Streaming**: Use streaming for large files
+
+### Maintenance
+- **File Cleanup**: Implement automated cleanup
+- **Monitoring**: Monitor storage usage and performance
+- **Backup**: Implement proper backup strategies
+- **Documentation**: Document file storage patterns
+
+## Custom Storage Drivers
+
+### Implementing Custom Driver
+```go
+// app/extensions/custom_storage_driver.go
+package extensions
+
+import (
+    "github.com/goravel/framework/contracts/filesystem"
+)
+
+type CustomStorageDriver struct {
+    // Custom driver implementation
+}
+
+// Implement filesystem.Driver interface
+func (d *CustomStorageDriver) AllDirectories(path string) ([]string, error) {
+    // Return all directories
+    return []string{}, nil
+}
+
+func (d *CustomStorageDriver) AllFiles(path string) ([]string, error) {
+    // Return all files
+    return []string{}, nil
+}
+
+func (d *CustomStorageDriver) Copy(source, destination string) error {
+    // Copy file
+    return nil
+}
+
+func (d *CustomStorageDriver) Delete(path string) error {
+    // Delete file
+    return nil
+}
+
+func (d *CustomStorageDriver) DeleteDirectory(path string) error {
+    // Delete directory
+    return nil
+}
+
+func (d *CustomStorageDriver) Directories(path string) ([]string, error) {
+    // Return directories
+    return []string{}, nil
+}
+
+func (d *CustomStorageDriver) Exists(path string) bool {
+    // Check if file exists
+    return false
+}
+
+func (d *CustomStorageDriver) Files(path string) ([]string, error) {
+    // Return files
+    return []string{}, nil
+}
+
+func (d *CustomStorageDriver) Get(path string) (string, error) {
+    // Get file content
+    return "", nil
+}
+
+func (d *CustomStorageDriver) LastModified(path string) (int64, error) {
+    // Get last modified time
+    return 0, nil
+}
+
+func (d *CustomStorageDriver) MakeDirectory(path string) error {
+    // Create directory
+    return nil
+}
+
+func (d *CustomStorageDriver) MimeType(path string) (string, error) {
+    // Get MIME type
+    return "", nil
+}
+
+func (d *CustomStorageDriver) Move(source, destination string) error {
+    // Move file
+    return nil
+}
+
+func (d *CustomStorageDriver) Path(path string) string {
+    // Get file path
+    return ""
+}
+
+func (d *CustomStorageDriver) Put(path, content string) error {
+    // Store file content
+    return nil
+}
+
+func (d *CustomStorageDriver) PutFile(path string, source filesystem.File) (string, error) {
+    // Store file
+    return "", nil
+}
+
+func (d *CustomStorageDriver) PutFileAs(path string, source filesystem.File, name string) (string, error) {
+    // Store file with custom name
+    return "", nil
+}
+
+func (d *CustomStorageDriver) Size(path string) (int64, error) {
+    // Get file size
+    return 0, nil
+}
+
+func (d *CustomStorageDriver) Url(path string) string {
+    // Get file URL
+    return ""
+}
+```
+
+### Registering Custom Driver
+```go
+// config/filesystems.go
+func init() {
+    config := facades.Config
+    config.Add("filesystems", map[string]interface{}{
+        "default": "custom",
+        "disks": map[string]any{
+            "custom": map[string]interface{}{
+                "driver": "custom",
+                "via": func() (filesystem.Driver, error) {
+                    return &CustomStorageDriver{}, nil
+                },
+            },
+        },
+    })
+}
+```
+
+## File Streaming
+
+### Streaming File Downloads
+```go
+func (c *FileController) Download(ctx http.Context) http.Response {
+    filePath := ctx.Request().Route("path")
+    
+    if !facades.Storage().Exists(filePath) {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "File not found",
+        })
+    }
+    
+    // Stream file download
+    return ctx.Response().File(facades.Storage().Path(filePath))
+}
+```
+
+### Streaming Large Files
+```go
+func (c *FileController) StreamLargeFile(ctx http.Context) http.Response {
+    filePath := ctx.Request().Route("path")
+    
+    return ctx.Response().Stream(http.StatusOK, func(w http.StreamWriter) error {
+        file, err := os.Open(facades.Storage().Path(filePath))
+        if err != nil {
+            return err
+        }
+        defer file.Close()
+        
+        _, err = io.Copy(w, file)
+        return err
+    })
+}
+```
+
+## File Security
+
+### Secure File Access
+```go
+func (c *FileController) SecureDownload(ctx http.Context) http.Response {
+    // Verify user permissions
+    if !c.hasFileAccess(ctx) {
+        return ctx.Response().Json(http.StatusForbidden, http.Json{
+            "error": "Access denied",
+        })
+    }
+    
+    filePath := ctx.Request().Route("path")
+    
+    // Validate file path to prevent directory traversal
+    if !c.isValidPath(filePath) {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "Invalid file path",
+        })
+    }
+    
+    return ctx.Response().File(facades.Storage().Path(filePath))
+}
+```
+
+### File Type Validation
+```go
+func (c *FileController) isValidFileType(file *multipart.FileHeader) bool {
+    allowedTypes := []string{"image/jpeg", "image/png", "image/gif"}
+    
+    fileType := file.Header.Get("Content-Type")
+    for _, allowedType := range allowedTypes {
+        if fileType == allowedType {
+            return true
+        }
+    }
+    
+    return false
+}
+```
+
+## Common File Storage Patterns
+
+### Image Processing
+```go
+func (c *FileController) ProcessImage(ctx http.Context) http.Response {
+    file, err := ctx.Request().File("image")
+    if err != nil {
+        return ctx.Response().Json(http.StatusBadRequest, http.Json{
+            "error": "No image uploaded",
+        })
+    }
+    
+    // Store original image
+    originalPath, err := facades.Storage().PutFile("images/original", file)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to store image",
+        })
+    }
+    
+    // Process and store thumbnail
+    thumbnailPath, err := c.createThumbnail(originalPath)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to create thumbnail",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "original":   facades.Storage().Url(originalPath),
+        "thumbnail": facades.Storage().Url(thumbnailPath),
+    })
+}
+```
+
+### File Cleanup
+```go
+func (c *FileController) CleanupOldFiles() {
+    // Get files older than 30 days
+    cutoff := time.Now().AddDate(0, 0, -30)
+    
+    files := facades.Storage().AllFiles("temp")
+    for _, file := range files {
+        modified, err := facades.Storage().LastModified(file)
+        if err != nil {
+            continue
+        }
+        
+        if time.Unix(modified, 0).Before(cutoff) {
+            facades.Storage().Delete(file)
+        }
+    }
+}
+```
+
+## File Storage Best Practices
+
+### Design Principles
+- **Security First**: Validate all file uploads and paths
+- **Performance**: Use appropriate storage drivers for your needs
+- **Scalability**: Consider cloud storage for large applications
+- **Backup**: Implement proper backup strategies
+
+### Performance Considerations
+- **CDN Integration**: Use CDN for static file delivery
+- **Caching**: Cache file metadata and URLs
+- **Compression**: Compress files when appropriate
+- **Streaming**: Use streaming for large files
+
+### Security Considerations
+- **File Validation**: Validate file types and sizes
+- **Path Security**: Prevent directory traversal attacks
+- **Access Control**: Implement proper file access control
+- **Virus Scanning**: Scan uploaded files for malware
+
+## Development Guidelines
+
+### File Organization
+- **Directory Structure**: Organize files in logical directories
+- **Naming Conventions**: Use consistent file naming
+- **Version Control**: Implement file versioning when needed
+- **Cleanup**: Implement automatic file cleanup
+
+### Testing File Storage
+```go
+func TestFileStorage(t *testing.T) {
+    // Test file storage operations
+    err := facades.Storage().Put("test.txt", "content")
+    assert.NoError(t, err)
+    
+    content := facades.Storage().Get("test.txt")
+    assert.Equal(t, "content", content)
+    
+    // Cleanup
+    facades.Storage().Delete("test.txt")
+}
+```
+
+### Monitoring and Maintenance
+- **Storage Usage**: Monitor storage usage and costs
+- **File Cleanup**: Implement automated cleanup processes
+- **Performance Monitoring**: Monitor file operation performance
+- **Error Tracking**: Track file operation errors
+
+## Best Practices
+
+### File Storage Design
+- **Appropriate Drivers**: Choose the right storage driver for your needs
+- **Security**: Implement comprehensive file security
+- **Performance**: Optimize file operations for performance
+- **Scalability**: Design for future growth
+
+### Security
+- **Input Validation**: Validate all file inputs
+- **Path Security**: Secure file paths and prevent traversal
+- **Access Control**: Implement proper access control
+- **File Scanning**: Scan files for security threats
+
+### Performance
+- **Efficient Operations**: Optimize file operations
+- **Caching**: Cache file metadata and URLs
+- **CDN Usage**: Use CDN for static file delivery
+- **Streaming**: Use streaming for large files
+
+### Maintenance
+- **File Cleanup**: Implement automated cleanup
+- **Monitoring**: Monitor storage usage and performance
+- **Backup**: Implement proper backup strategies
+- **Documentation**: Document file storage patterns

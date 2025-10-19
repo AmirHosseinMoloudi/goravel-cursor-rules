@@ -1,0 +1,695 @@
+---
+alwaysApply: true
+---
+
+# Goravel Backward Compatibility Enforcement
+
+**CRITICAL**: Always maintain backward compatibility in all code changes, API modifications, and system updates.
+
+## Backward Compatibility Requirements
+
+### Mandatory Compatibility Rules
+- **EVERY** API change must be backward compatible
+- **EVERY** function signature change must maintain compatibility
+- **EVERY** struct field change must be backward compatible
+- **EVERY** interface change must maintain compatibility
+- **EVERY** configuration change must be backward compatible
+- **EVERY** database migration must be backward compatible
+- **EVERY** service change must maintain compatibility
+
+### Prohibited Breaking Changes
+```go
+// ❌ FORBIDDEN - Breaking function signature changes
+// OLD: func CreateUser(name string, email string) error
+// NEW: func CreateUser(name string, email string, age int) error
+func CreateUser(name string, email string, age int) error {
+    // This breaks existing code that calls CreateUser(name, email)
+}
+
+// ❌ FORBIDDEN - Removing struct fields
+type User struct {
+    ID    uint   `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+    // Age field removed - BREAKING CHANGE
+}
+
+// ❌ FORBIDDEN - Changing field types
+type User struct {
+    ID    uint   `json:"id"`
+    Name  string `json:"name"`
+    Email int    `json:"email"` // Changed from string to int - BREAKING CHANGE
+}
+```
+
+### Required Backward Compatibility Patterns
+```go
+// ✅ REQUIRED - Add new parameters with default values
+func CreateUser(name string, email string, age ...int) error {
+    userAge := 0
+    if len(age) > 0 {
+        userAge = age[0]
+    }
+    // Implementation
+}
+
+// ✅ REQUIRED - Add new fields with default values
+type User struct {
+    ID    uint   `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+    Age   int    `json:"age,omitempty"` // New field with omitempty
+}
+
+// ✅ REQUIRED - Use interface composition for new methods
+type UserService interface {
+    CreateUser(name string, email string) error
+    // New methods can be added without breaking existing implementations
+    GetUserByID(id uint) (*User, error)
+}
+```
+
+## API Versioning Strategy
+
+### URL Versioning
+```go
+// ✅ REQUIRED - Version API endpoints
+// v1 API (existing)
+facades.Route().Group("api/v1", func(router route.Router) {
+    router.Get("/users", userController.Index)
+    router.Post("/users", userController.Store)
+    router.Get("/users/{id}", userController.Show)
+})
+
+// v2 API (new features)
+facades.Route().Group("api/v2", func(router route.Router) {
+    router.Get("/users", userControllerV2.Index)
+    router.Post("/users", userControllerV2.Store)
+    router.Get("/users/{id}", userControllerV2.Show)
+    // New v2 features
+    router.Get("/users/{id}/profile", userControllerV2.GetProfile)
+})
+```
+
+### Header Versioning
+```go
+// ✅ REQUIRED - Use headers for API versioning
+func (c *UserController) Index(ctx http.Context) http.Response {
+    apiVersion := ctx.Request().Header("API-Version", "v1")
+    
+    switch apiVersion {
+    case "v1":
+        return c.handleV1Index(ctx)
+    case "v2":
+        return c.handleV2Index(ctx)
+    default:
+        return c.handleV1Index(ctx) // Default to v1
+    }
+}
+```
+
+### Content Negotiation
+```go
+// ✅ REQUIRED - Use Accept header for versioning
+func (c *UserController) Show(ctx http.Context) http.Response {
+    acceptHeader := ctx.Request().Header("Accept", "application/json")
+    
+    if strings.Contains(acceptHeader, "application/vnd.api+json;version=2") {
+        return c.handleV2Show(ctx)
+    }
+    
+    return c.handleV1Show(ctx) // Default to v1
+}
+```
+
+## Database Migration Compatibility
+
+### Backward Compatible Migrations
+```go
+// ✅ REQUIRED - Add columns with default values
+func (m *AddAgeToUsersTable) Up() {
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.Integer("age").Default(0).Comment("User age")
+    })
+}
+
+// ✅ REQUIRED - Make columns nullable before removing
+func (m *RemoveAgeFromUsersTable) Up() {
+    // First make column nullable
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.Integer("age").Nullable().Change()
+    })
+    
+    // Then remove in separate migration
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.DropColumn("age")
+    })
+}
+
+// ✅ REQUIRED - Add indexes without breaking existing queries
+func (m *AddIndexToUsersTable) Up() {
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.Index("email").Name("idx_users_email")
+    })
+}
+```
+
+### Migration Rollback Strategy
+```go
+// ✅ REQUIRED - Ensure migrations can be rolled back
+func (m *AddAgeToUsersTable) Down() {
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        table.DropColumn("age")
+    })
+}
+
+// ✅ REQUIRED - Handle data migration in rollback
+func (m *MigrateUserData) Down() {
+    // Restore data from backup or reverse transformation
+    m.Schema().Table("users", func(table *schema.Blueprint) {
+        // Reverse data transformation
+    })
+}
+```
+
+## Service Layer Compatibility
+
+### Interface Evolution
+```go
+// ✅ REQUIRED - Extend interfaces without breaking existing implementations
+type UserRepositoryInterface interface {
+    // Existing methods (must remain)
+    FindByID(id uint) (*User, error)
+    Create(user *User) error
+    Update(user *User) error
+    Delete(id uint) error
+    
+    // New methods (can be added)
+    FindByEmail(email string) (*User, error)
+    FindActiveUsers() ([]*User, error)
+}
+
+// ✅ REQUIRED - Provide default implementations for new methods
+type BaseUserRepository struct {
+    // Base implementation
+}
+
+func (r *BaseUserRepository) FindByEmail(email string) (*User, error) {
+    // Default implementation
+    return nil, errors.New("not implemented")
+}
+
+func (r *BaseUserRepository) FindActiveUsers() ([]*User, error) {
+    // Default implementation
+    return []*User{}, nil
+}
+```
+
+### Service Method Compatibility
+```go
+// ✅ REQUIRED - Maintain method signatures
+type UserService struct {
+    userRepo UserRepositoryInterface
+}
+
+// Existing method - must remain unchanged
+func (s *UserService) CreateUser(name string, email string) (*User, error) {
+    // Implementation
+}
+
+// New method - can be added
+func (s *UserService) CreateUserWithAge(name string, email string, age int) (*User, error) {
+    // New implementation
+}
+
+// ✅ REQUIRED - Use method overloading with different signatures
+func (s *UserService) UpdateUser(id uint, data map[string]interface{}) (*User, error) {
+    // Generic update method
+}
+
+func (s *UserService) UpdateUserName(id uint, name string) (*User, error) {
+    // Specific update method
+}
+```
+
+## Configuration Compatibility
+
+### Configuration Evolution
+```go
+// ✅ REQUIRED - Add new configuration with defaults
+func init() {
+    config := facades.Config
+    config.Add("database", map[string]interface{}{
+        // Existing configuration
+        "default": config.Env("DB_CONNECTION", "mysql"),
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "127.0.0.1"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "goravel"),
+                "username": config.Env("DB_USERNAME", "root"),
+                "password": config.Env("DB_PASSWORD", ""),
+                // New configuration with defaults
+                "charset":  config.Env("DB_CHARSET", "utf8mb4"),
+                "timezone": config.Env("DB_TIMEZONE", "UTC"),
+            },
+        },
+    })
+}
+```
+
+### Environment Variable Compatibility
+```go
+// ✅ REQUIRED - Maintain existing environment variables
+func init() {
+    config := facades.Config
+    config.Add("app", map[string]interface{}{
+        // Existing variables
+        "name":    config.Env("APP_NAME", "Goravel"),
+        "env":     config.Env("APP_ENV", "production"),
+        "debug":   config.Env("APP_DEBUG", false),
+        "url":     config.Env("APP_URL", "http://localhost"),
+        "key":     config.Env("APP_KEY", ""),
+        // New variables with defaults
+        "timezone": config.Env("APP_TIMEZONE", "UTC"),
+        "locale":   config.Env("APP_LOCALE", "en"),
+    })
+}
+```
+
+## Model Compatibility
+
+### Struct Field Evolution
+```go
+// ✅ REQUIRED - Add new fields with default values
+type User struct {
+    orm.Model
+    // Existing fields
+    Name     string `json:"name"`
+    Email    string `json:"email"`
+    IsActive bool   `json:"is_active"`
+    
+    // New fields with appropriate defaults
+    Age      int    `json:"age,omitempty"`
+    Phone    string `json:"phone,omitempty"`
+    Address  string `json:"address,omitempty"`
+}
+
+// ✅ REQUIRED - Use tags for backward compatibility
+type User struct {
+    orm.Model
+    Name     string `json:"name"`
+    Email    string `json:"email"`
+    IsActive bool   `json:"is_active"`
+    
+    // New field with version-specific tags
+    Age      int    `json:"age,omitempty" gorm:"default:0"`
+    Phone    string `json:"phone,omitempty" gorm:"default:''"`
+}
+```
+
+### Method Compatibility
+```go
+// ✅ REQUIRED - Maintain existing method signatures
+func (u *User) GetFullName() string {
+    return u.Name
+}
+
+// ✅ REQUIRED - Add new methods without breaking existing ones
+func (u *User) GetDisplayName() string {
+    if u.Name != "" {
+        return u.Name
+    }
+    return u.Email
+}
+
+// ✅ REQUIRED - Use method overloading
+func (u *User) Update(data map[string]interface{}) error {
+    // Generic update method
+}
+
+func (u *User) UpdateName(name string) error {
+    // Specific update method
+}
+```
+
+## Controller Compatibility
+
+### API Response Compatibility
+```go
+// ✅ REQUIRED - Maintain existing response format
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Maintain existing response format
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+
+// ✅ REQUIRED - Add new response fields without breaking existing clients
+func (c *UserController) ShowV2(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Extended response format
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+        "meta": map[string]interface{}{
+            "version": "v2",
+            "timestamp": time.Now().Unix(),
+        },
+    })
+}
+```
+
+### Request Parameter Compatibility
+```go
+// ✅ REQUIRED - Maintain existing parameter handling
+func (c *UserController) Index(ctx http.Context) http.Response {
+    // Existing parameters
+    page := ctx.Request().QueryInt("page", 1)
+    limit := ctx.Request().QueryInt("limit", 10)
+    
+    // New parameters with defaults
+    sort := ctx.Request().Query("sort", "id")
+    order := ctx.Request().Query("order", "asc")
+    
+    users, total, err := c.userService.GetUsers(page, limit, sort, order)
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, http.Json{
+            "error": "Failed to fetch users",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "users": users,
+        "pagination": map[string]any{
+            "page":  page,
+            "limit": limit,
+            "total": total,
+        },
+    })
+}
+```
+
+## Middleware Compatibility
+
+### Middleware Evolution
+```go
+// ✅ REQUIRED - Maintain existing middleware behavior
+func AuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Existing authentication logic
+        token := ctx.Request().Header("Authorization")
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Validate token
+        if !validateToken(token) {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        ctx.Next()
+    }
+}
+
+// ✅ REQUIRED - Add new middleware without breaking existing ones
+func EnhancedAuthMiddleware() http.Middleware {
+    return func(ctx http.Context) {
+        // Enhanced authentication with additional features
+        token := ctx.Request().Header("Authorization")
+        if token == "" {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Authorization header required",
+            })
+            return
+        }
+        
+        // Enhanced token validation
+        user, err := validateTokenWithUser(token)
+        if err != nil {
+            ctx.Response().Json(http.StatusUnauthorized, http.Json{
+                "error": "Invalid token",
+            })
+            return
+        }
+        
+        // Set user in context for downstream use
+        ctx.Set("user", user)
+        ctx.Next()
+    }
+}
+```
+
+## Testing Compatibility
+
+### Test Compatibility
+```go
+// ✅ REQUIRED - Maintain existing test structure
+func TestUserService_CreateUser(t *testing.T) {
+    // Existing test logic
+    userService := NewUserService(mockRepo)
+    
+    user, err := userService.CreateUser("John Doe", "john@example.com")
+    assert.NoError(t, err)
+    assert.Equal(t, "John Doe", user.Name)
+    assert.Equal(t, "john@example.com", user.Email)
+}
+
+// ✅ REQUIRED - Add new tests without breaking existing ones
+func TestUserService_CreateUserWithAge(t *testing.T) {
+    userService := NewUserService(mockRepo)
+    
+    user, err := userService.CreateUserWithAge("John Doe", "john@example.com", 30)
+    assert.NoError(t, err)
+    assert.Equal(t, "John Doe", user.Name)
+    assert.Equal(t, "john@example.com", user.Email)
+    assert.Equal(t, 30, user.Age)
+}
+```
+
+## Documentation Compatibility
+
+### API Documentation
+```go
+// ✅ REQUIRED - Document backward compatibility
+// @Summary Get user by ID
+// @Description Get user by ID (v1 API - maintained for backward compatibility)
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} User
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Implementation
+}
+
+// ✅ REQUIRED - Document new API versions
+// @Summary Get user by ID (v2)
+// @Description Get user by ID with enhanced response format
+// @Tags users-v2
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} UserV2Response
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v2/users/{id} [get]
+func (c *UserController) ShowV2(ctx http.Context) http.Response {
+    // Implementation
+}
+```
+
+## Deployment Compatibility
+
+### Deployment Strategy
+```go
+// ✅ REQUIRED - Gradual rollout strategy
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Check if client supports v2
+    apiVersion := ctx.Request().Header("API-Version", "v1")
+    
+    if apiVersion == "v2" {
+        return c.handleV2Show(ctx)
+    }
+    
+    // Default to v1 for backward compatibility
+    return c.handleV1Show(ctx)
+}
+
+// ✅ REQUIRED - Feature flags for new functionality
+func (c *UserController) Index(ctx http.Context) http.Response {
+    // Check feature flag
+    if facades.Config().GetBool("features.enhanced_user_list", false) {
+        return c.handleEnhancedIndex(ctx)
+    }
+    
+    // Default to existing implementation
+    return c.handleStandardIndex(ctx)
+}
+```
+
+## Error Handling Compatibility
+
+### Error Response Compatibility
+```go
+// ✅ REQUIRED - Maintain existing error format
+func (c *UserController) Show(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        // Maintain existing error format
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+
+// ✅ REQUIRED - Add new error fields without breaking existing clients
+func (c *UserController) ShowV2(ctx http.Context) http.Response {
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        // Enhanced error format
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+            "code":  "USER_NOT_FOUND",
+            "details": map[string]interface{}{
+                "user_id": ctx.Request().RouteInt("id"),
+                "timestamp": time.Now().Unix(),
+            },
+        })
+    }
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+        "meta": map[string]interface{}{
+            "version": "v2",
+        },
+    })
+}
+```
+
+## Performance Compatibility
+
+### Performance Considerations
+```go
+// ✅ REQUIRED - Maintain performance characteristics
+func (s *UserService) GetUsers(page, limit int) ([]*User, int, error) {
+    // Maintain existing performance characteristics
+    offset := (page - 1) * limit
+    
+    var users []*User
+    err := facades.Orm().Query().Offset(offset).Limit(limit).Find(&users)
+    if err != nil {
+        return nil, 0, err
+    }
+    
+    var total int64
+    facades.Orm().Query().Model(&User{}).Count(&total)
+    
+    return users, int(total), nil
+}
+
+// ✅ REQUIRED - Add performance improvements without breaking existing behavior
+func (s *UserService) GetUsersWithCache(page, limit int) ([]*User, int, error) {
+    // Check cache first
+    cacheKey := fmt.Sprintf("users:%d:%d", page, limit)
+    if cached, err := facades.Cache().Get(cacheKey); err == nil {
+        return cached.([]*User), 0, nil
+    }
+    
+    // Fallback to existing implementation
+    users, total, err := s.GetUsers(page, limit)
+    if err != nil {
+        return nil, 0, err
+    }
+    
+    // Cache the result
+    facades.Cache().Put(cacheKey, users, 5*time.Minute)
+    
+    return users, total, nil
+}
+```
+
+## Monitoring Compatibility
+
+### Monitoring and Logging
+```go
+// ✅ REQUIRED - Maintain existing logging format
+func (c *UserController) Show(ctx http.Context) http.Response {
+    start := time.Now()
+    
+    user, err := c.userService.GetUser(ctx.Request().RouteInt("id"))
+    if err != nil {
+        facades.Log().Error("Failed to get user", map[string]any{
+            "user_id": ctx.Request().RouteInt("id"),
+            "error":   err.Error(),
+        })
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    // Log successful request
+    facades.Log().Info("User retrieved successfully", map[string]any{
+        "user_id": user.ID,
+        "duration": time.Since(start).Milliseconds(),
+    })
+    
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+## Best Practices
+
+### Design Principles
+- **Never Break Existing APIs**: Always maintain existing API contracts
+- **Additive Changes Only**: Only add new functionality, never remove existing
+- **Default Values**: Provide sensible defaults for new parameters
+- **Versioning Strategy**: Use clear versioning for breaking changes
+- **Documentation**: Document all compatibility considerations
+
+### Implementation Guidelines
+- **Interface Segregation**: Use interfaces to maintain compatibility
+- **Dependency Injection**: Use DI to maintain service compatibility
+- **Configuration Management**: Maintain configuration compatibility
+- **Database Schema**: Use backward-compatible migrations
+- **Testing**: Maintain test compatibility
+
+### Deployment Guidelines
+- **Gradual Rollout**: Roll out changes gradually
+- **Feature Flags**: Use feature flags for new functionality
+- **Monitoring**: Monitor for compatibility issues
+- **Rollback Strategy**: Have rollback plans ready
+- **Communication**: Communicate changes to stakeholders
+
+### Maintenance Guidelines
+- **Deprecation Process**: Follow proper deprecation processes
+- **Migration Paths**: Provide clear migration paths
+- **Support Timeline**: Maintain support for deprecated features
+- **Documentation Updates**: Keep documentation current
+- **User Communication**: Communicate changes effectively

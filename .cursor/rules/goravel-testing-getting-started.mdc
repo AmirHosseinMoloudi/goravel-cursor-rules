@@ -1,0 +1,670 @@
+---
+alwaysApply: true
+---
+
+# Goravel Testing Getting Started
+
+Based on the [official Goravel testing documentation](https://www.goravel.dev/testing/getting-started.html).
+
+## Testing Overview
+
+### Introduction
+- **Golang Test Component**: Goravel's testing relies on Golang's official test component
+- **Integration Testing**: Extends unit testing to support integration testing
+- **Application Robustness**: Improves application robustness through comprehensive testing
+- **Testify Suite**: Uses stretchr/testify package for organized test cases
+
+### Key Concepts
+- **TestCase Struct**: Provides convenient test methods and application registration
+- **Environment Configuration**: Support for custom environment files during testing
+- **Database Testing**: Model factories and seeders for test data creation
+- **Docker Testing**: Isolated testing environments using Docker containers
+
+## Environment Configuration
+
+### Custom Environment Files
+```go
+// ✅ REQUIRED - Custom environment file structure
+// Project structure for testing
+/*
+- /app
+- /config
+- ...
+- /test
+  - /feature
+    - .env
+    - user_test.go
+- .env
+*/
+```
+
+### Environment File Priority
+```bash
+# ✅ REQUIRED - Environment file loading order
+# 1. Package-specific .env file (e.g., /test/feature/.env)
+# 2. Root .env file
+# 3. .env.testing file with --env option
+
+# Using .env.testing file
+go test ./... --env=.env.testing
+go test ./... -e=.env.testing
+```
+
+### TestCase Struct
+```go
+// ✅ REQUIRED - TestCase struct with init method
+package tests
+
+import (
+    "github.com/goravel/framework/facades"
+    "github.com/goravel/framework/contracts/foundation"
+)
+
+type TestCase struct {
+    // TestCase provides convenient test methods
+}
+
+func init() {
+    // Register Goravel application before running tests
+    app := foundation.NewApplication()
+    app.Boot()
+    
+    // Include any necessary logic that needs to be executed before tests
+    facades.Config().Add("app", map[string]interface{}{
+        "env": "testing",
+    })
+}
+```
+
+## Creating Tests
+
+### Artisan Test Generation
+```bash
+# ✅ REQUIRED - Generate test using Artisan command
+go run . artisan make:test feature/UserTest
+go run . artisan make:test unit/UserServiceTest
+go run . artisan make:test integration/APITest
+```
+
+### Test Suite Structure
+```go
+// ✅ REQUIRED - Test suite with testify/suite
+package feature
+
+import (
+    "testing"
+    
+    "github.com/stretchr/testify/suite"
+    "goravel/tests"
+)
+
+type ExampleTestSuite struct {
+    suite.Suite
+    tests.TestCase
+}
+
+func TestExampleTestSuite(t *testing.T) {
+    suite.Run(t, new(ExampleTestSuite))
+}
+
+// SetupTest will run before each test in the suite
+func (s *ExampleTestSuite) SetupTest() {
+    // Setup logic for each test
+    s.RefreshDatabase()
+}
+
+// TearDownTest will run after each test in the suite
+func (s *ExampleTestSuite) TearDownTest() {
+    // Cleanup logic for each test
+}
+
+func (s *ExampleTestSuite) TestIndex() {
+    // Test implementation
+    s.True(true)
+}
+```
+
+### Test Suite Methods
+```go
+// ✅ REQUIRED - Test suite lifecycle methods
+func (s *ExampleTestSuite) SetupSuite() {
+    // Run once before all tests in the suite
+}
+
+func (s *ExampleTestSuite) TearDownSuite() {
+    // Run once after all tests in the suite
+}
+
+func (s *ExampleTestSuite) SetupTest() {
+    // Run before each test
+}
+
+func (s *ExampleTestSuite) TearDownTest() {
+    // Run after each test
+}
+
+func (s *ExampleTestSuite) BeforeTest(suiteName, testName string) {
+    // Run before each individual test
+}
+
+func (s *ExampleTestSuite) AfterTest(suiteName, testName string) {
+    // Run after each individual test
+}
+```
+
+## Database Testing
+
+### Model Factories
+```go
+// ✅ REQUIRED - Using model factories for test data
+func (s *UserTestSuite) TestUserCreation() {
+    var user models.User
+    err := facades.Orm().Factory().Create(&user)
+    
+    s.NoError(err)
+    s.NotNil(user)
+    s.NotEmpty(user.Name)
+    s.NotEmpty(user.Email)
+}
+
+// ✅ REQUIRED - Creating multiple test records
+func (s *UserTestSuite) TestMultipleUsers() {
+    var users []models.User
+    err := facades.Orm().Factory().Create(&users)
+    
+    s.NoError(err)
+    s.Len(users, 1) // Default creates one record
+}
+
+// ✅ REQUIRED - Creating with specific attributes
+func (s *UserTestSuite) TestUserWithSpecificData() {
+    user := &models.User{
+        Name:  "Test User",
+        Email: "test@example.com",
+    }
+    
+    err := facades.Orm().Factory().Create(user)
+    
+    s.NoError(err)
+    s.Equal("Test User", user.Name)
+    s.Equal("test@example.com", user.Email)
+}
+```
+
+### Database Seeders
+```go
+// ✅ REQUIRED - Running database seeders in tests
+func (s *ExampleTestSuite) TestWithSeeders() {
+    // Run the DatabaseSeeder
+    s.Seed()
+    
+    // Run multiple specific seeders
+    s.Seed(&seeders.UserSeeder{}, &seeders.PhotoSeeder{})
+    
+    // Verify seeded data
+    var userCount int64
+    facades.Orm().Query().Model(&models.User{}).Count(&userCount)
+    s.Greater(userCount, int64(0))
+}
+
+// ✅ REQUIRED - Seeder with custom data
+func (s *ExampleTestSuite) TestWithCustomSeeder() {
+    // Create custom seeder for test
+    customSeeder := &seeders.TestSeeder{
+        Data: []map[string]interface{}{
+            {"name": "Test User 1", "email": "test1@example.com"},
+            {"name": "Test User 2", "email": "test2@example.com"},
+        },
+    }
+    
+    s.Seed(customSeeder)
+    
+    // Verify custom data
+    var users []models.User
+    facades.Orm().Query().Find(&users)
+    s.Len(users, 2)
+}
+```
+
+## Docker Testing
+
+### Docker Test Setup
+```go
+// ✅ REQUIRED - Docker testing for isolated environments
+func TestMain(m *testing.M) {
+    // Initialize Docker database
+    database, err := facades.Testing().Docker().Database()
+    if err != nil {
+        panic(err)
+    }
+    
+    // Build database image
+    if err := database.Build(); err != nil {
+        panic(err)
+    }
+    
+    // Run migrations
+    if err := database.Migrate(); err != nil {
+        panic(err)
+    }
+    
+    // Execute test cases
+    exit := m.Run()
+    
+    // Cleanup: Uninstall image after all test cases
+    if err := database.Shutdown(); err != nil {
+        panic(err)
+    }
+    
+    os.Exit(exit)
+}
+```
+
+### Docker Database Configuration
+```go
+// ✅ REQUIRED - Docker database setup
+func (s *ExampleTestSuite) SetupSuite() {
+    // Create Docker database
+    database, err := facades.Testing().Docker().Database()
+    s.NoError(err)
+    
+    // Build database image
+    err = database.Build()
+    s.NoError(err)
+    
+    // Run migrations
+    err = database.Migrate()
+    s.NoError(err)
+    
+    // Store database reference for cleanup
+    s.database = database
+}
+
+func (s *ExampleTestSuite) TearDownSuite() {
+    // Cleanup database
+    if s.database != nil {
+        s.database.Shutdown()
+    }
+}
+```
+
+### Docker Cache Configuration
+```go
+// ✅ REQUIRED - Docker cache setup
+func (s *ExampleTestSuite) SetupSuite() {
+    // Create Docker cache
+    cache, err := facades.Testing().Docker().Cache()
+    s.NoError(err)
+    
+    // Build cache image
+    err = cache.Build()
+    s.NoError(err)
+    
+    // Store cache reference
+    s.cache = cache
+}
+
+func (s *ExampleTestSuite) TearDownSuite() {
+    // Cleanup cache
+    if s.cache != nil {
+        s.cache.Shutdown()
+    }
+}
+```
+
+### Custom Docker Images
+```go
+// ✅ REQUIRED - Custom Docker image configuration
+func (s *ExampleTestSuite) SetupSuite() {
+    import contractstesting "github.com/goravel/framework/contracts/testing"
+    
+    // Create custom image
+    image, err := facades.Testing().Docker().Image(contractstesting.Image{
+        Repository: "mysql",
+        Tag:        "5.7",
+        Env: []string{
+            "MYSQL_ROOT_PASSWORD=123123",
+            "MYSQL_DATABASE=goravel",
+        },
+        ExposedPorts: []string{"3306"},
+    })
+    s.NoError(err)
+    
+    // Build custom image
+    err = image.Build()
+    s.NoError(err)
+    
+    // Get configuration
+    config := image.Config()
+    s.NotNil(config)
+}
+```
+
+### Database Refresh Methods
+```go
+// ✅ REQUIRED - Database refresh for test isolation
+func (s *ExampleTestSuite) SetupTest() {
+    // Refresh database for each test
+    s.RefreshDatabase()
+}
+
+// ✅ REQUIRED - Fresh database state
+func (s *ExampleTestSuite) TestWithFreshDatabase() {
+    // Fresh database state
+    err := s.database.Fresh()
+    s.NoError(err)
+    
+    // Run test with clean database
+    s.TestUserCreation()
+}
+
+// ✅ REQUIRED - Cache refresh
+func (s *ExampleTestSuite) TestWithFreshCache() {
+    // Fresh cache state
+    err := s.cache.Fresh()
+    s.NoError(err)
+    
+    // Run test with clean cache
+    s.TestCacheOperations()
+}
+```
+
+## Test Organization
+
+### Test Package Structure
+```go
+// ✅ REQUIRED - Organized test package structure
+/*
+tests/
+├── feature/           # Feature tests
+│   ├── .env
+│   ├── main_test.go
+│   ├── user_test.go
+│   └── api_test.go
+├── unit/              # Unit tests
+│   ├── services/
+│   ├── repositories/
+│   └── models/
+├── integration/       # Integration tests
+│   ├── database/
+│   ├── api/
+│   └── external/
+└── helpers/           # Test helpers
+    ├── factories/
+    ├── fixtures/
+    └── mocks/
+*/
+```
+
+### Test Helper Functions
+```go
+// ✅ REQUIRED - Test helper functions
+package helpers
+
+import (
+    "goravel/app/models"
+    "github.com/goravel/framework/facades"
+)
+
+// CreateTestUser creates a test user with default values
+func CreateTestUser(attributes ...map[string]interface{}) *models.User {
+    user := &models.User{}
+    
+    if len(attributes) > 0 {
+        // Apply custom attributes
+        for key, value := range attributes[0] {
+            switch key {
+            case "name":
+                user.Name = value.(string)
+            case "email":
+                user.Email = value.(string)
+            }
+        }
+    }
+    
+    err := facades.Orm().Factory().Create(user)
+    if err != nil {
+        panic(err)
+    }
+    
+    return user
+}
+
+// CleanupTestData cleans up test data
+func CleanupTestData() {
+    facades.Orm().Query().Exec("DELETE FROM users")
+    facades.Orm().Query().Exec("DELETE FROM sessions")
+}
+```
+
+### Test Fixtures
+```go
+// ✅ REQUIRED - Test fixtures for consistent test data
+package fixtures
+
+import "goravel/app/models"
+
+type UserFixtures struct{}
+
+func (f *UserFixtures) AdminUser() *models.User {
+    return &models.User{
+        Name:     "Admin User",
+        Email:    "admin@example.com",
+        Role:     "admin",
+        IsActive: true,
+    }
+}
+
+func (f *UserFixtures) RegularUser() *models.User {
+    return &models.User{
+        Name:     "Regular User",
+        Email:    "user@example.com",
+        Role:     "user",
+        IsActive: true,
+    }
+}
+
+func (f *UserFixtures) InactiveUser() *models.User {
+    return &models.User{
+        Name:     "Inactive User",
+        Email:    "inactive@example.com",
+        Role:     "user",
+        IsActive: false,
+    }
+}
+```
+
+## Test Best Practices
+
+### Test Naming Conventions
+```go
+// ✅ REQUIRED - Clear test naming
+func (s *UserTestSuite) TestUserCreation() {
+    // Test user creation functionality
+}
+
+func (s *UserTestSuite) TestUserCreationWithInvalidData() {
+    // Test user creation with invalid data
+}
+
+func (s *UserTestSuite) TestUserCreationWithDuplicateEmail() {
+    // Test user creation with duplicate email
+}
+
+func (s *UserTestSuite) TestUserUpdate() {
+    // Test user update functionality
+}
+
+func (s *UserTestSuite) TestUserDeletion() {
+    // Test user deletion functionality
+}
+```
+
+### Test Assertions
+```go
+// ✅ REQUIRED - Comprehensive test assertions
+func (s *UserTestSuite) TestUserValidation() {
+    user := &models.User{
+        Name:  "Test User",
+        Email: "test@example.com",
+    }
+    
+    // Test user creation
+    err := facades.Orm().Query().Create(user)
+    s.NoError(err)
+    s.NotNil(user.ID)
+    
+    // Test user retrieval
+    var retrievedUser models.User
+    err = facades.Orm().Query().Where("id", user.ID).First(&retrievedUser)
+    s.NoError(err)
+    s.Equal(user.Name, retrievedUser.Name)
+    s.Equal(user.Email, retrievedUser.Email)
+    
+    // Test user update
+    retrievedUser.Name = "Updated User"
+    err = facades.Orm().Query().Save(&retrievedUser)
+    s.NoError(err)
+    
+    // Test user deletion
+    err = facades.Orm().Query().Delete(&retrievedUser)
+    s.NoError(err)
+}
+```
+
+### Test Data Cleanup
+```go
+// ✅ REQUIRED - Proper test data cleanup
+func (s *UserTestSuite) TearDownTest() {
+    // Clean up test data after each test
+    facades.Orm().Query().Exec("DELETE FROM users WHERE email LIKE 'test%@example.com'")
+    facades.Orm().Query().Exec("DELETE FROM sessions")
+    facades.Cache().Flush()
+}
+```
+
+### Test Performance
+```go
+// ✅ REQUIRED - Performance testing considerations
+func (s *UserTestSuite) TestUserCreationPerformance() {
+    start := time.Now()
+    
+    // Create multiple users
+    for i := 0; i < 100; i++ {
+        user := &models.User{
+            Name:  fmt.Sprintf("User %d", i),
+            Email: fmt.Sprintf("user%d@example.com", i),
+        }
+        err := facades.Orm().Query().Create(user)
+        s.NoError(err)
+    }
+    
+    duration := time.Since(start)
+    s.Less(duration, 5*time.Second, "User creation should be fast")
+}
+```
+
+## Test Configuration
+
+### Test Environment Setup
+```go
+// ✅ REQUIRED - Test environment configuration
+func init() {
+    // Set test environment
+    os.Setenv("APP_ENV", "testing")
+    os.Setenv("DB_CONNECTION", "sqlite")
+    os.Setenv("DB_DATABASE", ":memory:")
+    
+    // Configure test-specific settings
+    facades.Config().Add("app", map[string]interface{}{
+        "env":   "testing",
+        "debug": true,
+    })
+    
+    facades.Config().Add("database", map[string]interface{}{
+        "default": "sqlite",
+        "connections": map[string]any{
+            "sqlite": map[string]any{
+                "driver":   "sqlite",
+                "database": ":memory:",
+            },
+        },
+    })
+}
+```
+
+### Test Database Configuration
+```go
+// ✅ REQUIRED - Test database setup
+func (s *ExampleTestSuite) SetupSuite() {
+    // Configure test database
+    facades.Config().Add("database", map[string]interface{}{
+        "default": "sqlite",
+        "connections": map[string]any{
+            "sqlite": map[string]any{
+                "driver":   "sqlite",
+                "database": ":memory:",
+            },
+        },
+    })
+    
+    // Run migrations
+    err := facades.Orm().Migrate()
+    s.NoError(err)
+}
+```
+
+## Test Documentation
+
+### Test Documentation Standards
+```go
+// ✅ REQUIRED - Documented test cases
+// TestUserCreation tests the user creation functionality
+// It verifies that a user can be created with valid data
+// and that the user is properly stored in the database
+func (s *UserTestSuite) TestUserCreation() {
+    // Test implementation
+}
+
+// TestUserCreationWithInvalidData tests user creation with invalid data
+// It verifies that appropriate errors are returned for invalid input
+// and that no user is created in the database
+func (s *UserTestSuite) TestUserCreationWithInvalidData() {
+    // Test implementation
+}
+```
+
+### Test Coverage Requirements
+```go
+// ✅ REQUIRED - Test coverage requirements
+// All public methods must have test coverage
+// All error paths must be tested
+// All edge cases must be covered
+// Integration tests must cover critical workflows
+```
+
+## Best Practices Summary
+
+### Design Principles
+- **Test Isolation**: Each test should be independent
+- **Test Data**: Use factories and fixtures for consistent test data
+- **Test Cleanup**: Always clean up test data after tests
+- **Test Organization**: Organize tests by functionality and type
+
+### Performance Considerations
+- **Test Speed**: Keep tests fast and efficient
+- **Test Data**: Use minimal test data when possible
+- **Test Parallelization**: Use Docker for parallel test execution
+- **Test Resources**: Clean up resources after tests
+
+### Security Considerations
+- **Test Data**: Use safe test data without sensitive information
+- **Test Isolation**: Ensure tests don't affect each other
+- **Test Cleanup**: Remove all test data after tests
+- **Test Environment**: Use isolated test environments
+
+### Reliability Considerations
+- **Test Stability**: Make tests deterministic and stable
+- **Test Maintenance**: Keep tests up to date with code changes
+- **Test Documentation**: Document test purpose and requirements
+- **Test Coverage**: Maintain comprehensive test coverage

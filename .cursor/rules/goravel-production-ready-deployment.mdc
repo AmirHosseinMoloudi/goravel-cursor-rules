@@ -1,0 +1,856 @@
+---
+alwaysApply: true
+---
+
+# Goravel Production-Ready One-Click Deployment
+
+**CRITICAL**: Every Goravel application must be production-ready with one-click deployment capabilities. No manual configuration, no additional setup, no exceptions.
+
+## Production-Ready Requirements
+
+### Mandatory Production Standards
+- **EVERY** application must be deployable with a single command
+- **EVERY** environment must be fully configured and secure
+- **EVERY** dependency must be locked and versioned
+- **EVERY** configuration must be environment-aware
+- **EVERY** database must be migration-ready
+- **EVERY** service must be containerized and scalable
+- **EVERY** monitoring must be built-in and operational
+
+### Prohibited Production Anti-Patterns
+```go
+// ❌ FORBIDDEN - Hardcoded configuration
+func main() {
+    facades.Route().Run("localhost:8080") // Hardcoded host
+}
+
+// ❌ FORBIDDEN - Missing environment validation
+func init() {
+    // No environment validation
+    facades.Config.Add("app", map[string]interface{}{
+        "key": "hardcoded-key", // Hardcoded secrets
+    })
+}
+
+// ❌ FORBIDDEN - Missing health checks
+func main() {
+    // No health check endpoints
+    facades.Route().Run(":8080")
+}
+
+// ❌ FORBIDDEN - Missing graceful shutdown
+func main() {
+    // No graceful shutdown handling
+    facades.Route().Run(":8080")
+}
+```
+
+### Required Production Patterns
+```go
+// ✅ REQUIRED - Production-ready main.go
+package main
+
+import (
+    "context"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+    
+    "github.com/goravel/framework/facades"
+    "goravel/bootstrap"
+)
+
+func main() {
+    // Bootstrap application
+    bootstrap.Boot()
+    
+    // Validate environment
+    if err := validateEnvironment(); err != nil {
+        facades.Log().Fatal("Environment validation failed", map[string]any{
+            "error": err.Error(),
+        })
+        os.Exit(1)
+    }
+    
+    // Setup graceful shutdown
+    setupGracefulShutdown()
+    
+    // Start health checks
+    startHealthChecks()
+    
+    // Start application
+    facades.Log().Info("Starting Goravel application", map[string]any{
+        "version": facades.Config().GetString("app.version"),
+        "env":     facades.Config().GetString("app.env"),
+    })
+    
+    // Start server
+    go func() {
+        if err := facades.Route().Run(facades.Config().GetString("app.host")); err != nil {
+            facades.Log().Fatal("Server failed to start", map[string]any{
+                "error": err.Error(),
+            })
+        }
+    }()
+    
+    // Wait for shutdown signal
+    <-shutdownChan
+}
+
+// ✅ REQUIRED - Environment validation
+func validateEnvironment() error {
+    requiredVars := []string{
+        "APP_KEY",
+        "DB_HOST",
+        "DB_DATABASE",
+        "DB_USERNAME",
+        "DB_PASSWORD",
+    }
+    
+    for _, envVar := range requiredVars {
+        if os.Getenv(envVar) == "" {
+            return fmt.Errorf("required environment variable %s is not set", envVar)
+        }
+    }
+    
+    return nil
+}
+```
+
+## Docker Production Configuration
+
+### Multi-Stage Dockerfile
+```dockerfile
+# ✅ REQUIRED - Production-ready Dockerfile
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+
+# Production stage
+FROM alpine:latest
+
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata
+
+# Create non-root user
+RUN adduser -D -s /bin/sh appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/main .
+
+# Copy application files
+COPY --from=builder /app/.env .
+COPY --from=builder /app/database/ ./database/
+COPY --from=builder /app/public/ ./public/
+COPY --from=builder /app/storage/ ./storage/
+COPY --from=builder /app/resources/ ./resources/
+
+# Set ownership
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Start application
+CMD ["./main"]
+```
+
+### Docker Compose Production
+```yaml
+# ✅ REQUIRED - Production docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_HOST=db
+      - REDIS_HOST=redis
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+```
+
+## Environment Configuration
+
+### Production Environment Setup
+```go
+// ✅ REQUIRED - Production environment configuration
+func init() {
+    config := facades.Config
+    
+    // Application configuration
+    config.Add("app", map[string]interface{}{
+        "name":     config.Env("APP_NAME", "Goravel Production"),
+        "env":      config.Env("APP_ENV", "production"),
+        "debug":    config.Env("APP_DEBUG", false),
+        "url":      config.Env("APP_URL", "https://api.example.com"),
+        "key":      config.Env("APP_KEY", ""),
+        "timezone": config.Env("APP_TIMEZONE", "UTC"),
+        "version":  config.Env("APP_VERSION", "1.0.0"),
+        "host":     config.Env("APP_HOST", "0.0.0.0:8080"),
+    })
+    
+    // Database configuration
+    config.Add("database", map[string]interface{}{
+        "default": config.Env("DB_CONNECTION", "mysql"),
+        "connections": map[string]any{
+            "mysql": map[string]any{
+                "driver":   "mysql",
+                "host":     config.Env("DB_HOST", "localhost"),
+                "port":     config.Env("DB_PORT", 3306),
+                "database": config.Env("DB_DATABASE", "goravel"),
+                "username": config.Env("DB_USERNAME", "root"),
+                "password": config.Env("DB_PASSWORD", ""),
+                "charset":  "utf8mb4",
+                "timezone": "UTC",
+                "parse_time": true,
+                "loc": "UTC",
+            },
+        },
+    })
+    
+    // Cache configuration
+    config.Add("cache", map[string]interface{}{
+        "default": config.Env("CACHE_STORE", "redis"),
+        "stores": map[string]any{
+            "redis": map[string]any{
+                "driver": "redis",
+                "connection": "default",
+            },
+        },
+    })
+    
+    // Queue configuration
+    config.Add("queue", map[string]interface{}{
+        "default": config.Env("QUEUE_CONNECTION", "redis"),
+        "connections": map[string]any{
+            "redis": map[string]any{
+                "driver": "redis",
+                "connection": "default",
+                "queue": "default",
+            },
+        },
+    })
+}
+```
+
+### Environment Validation
+```go
+// ✅ REQUIRED - Comprehensive environment validation
+func validateProductionEnvironment() error {
+    requiredVars := map[string]string{
+        "APP_KEY":           "Application encryption key",
+        "DB_HOST":           "Database host",
+        "DB_DATABASE":       "Database name",
+        "DB_USERNAME":       "Database username",
+        "DB_PASSWORD":       "Database password",
+        "REDIS_HOST":        "Redis host",
+        "JWT_SECRET":        "JWT secret key",
+        "MAIL_HOST":         "Mail server host",
+        "MAIL_USERNAME":     "Mail username",
+        "MAIL_PASSWORD":     "Mail password",
+    }
+    
+    missingVars := []string{}
+    
+    for envVar, description := range requiredVars {
+        if os.Getenv(envVar) == "" {
+            missingVars = append(missingVars, fmt.Sprintf("%s (%s)", envVar, description))
+        }
+    }
+    
+    if len(missingVars) > 0 {
+        return fmt.Errorf("missing required environment variables: %s", strings.Join(missingVars, ", "))
+    }
+    
+    return nil
+}
+```
+
+## Health Checks & Monitoring
+
+### Application Health Checks
+```go
+// ✅ REQUIRED - Comprehensive health checks
+func (c *HealthController) Check(ctx http.Context) http.Response {
+    health := map[string]interface{}{
+        "status":    "healthy",
+        "timestamp": time.Now().Unix(),
+        "version":   facades.Config().GetString("app.version"),
+        "uptime":    getUptime(),
+    }
+    
+    // Check database
+    if err := checkDatabase(); err != nil {
+        health["database"] = map[string]interface{}{
+            "status": "unhealthy",
+            "error":  err.Error(),
+        }
+        health["status"] = "unhealthy"
+    } else {
+        health["database"] = map[string]interface{}{
+            "status": "healthy",
+        }
+    }
+    
+    // Check cache
+    if err := checkCache(); err != nil {
+        health["cache"] = map[string]interface{}{
+            "status": "unhealthy",
+            "error":  err.Error(),
+        }
+        health["status"] = "unhealthy"
+    } else {
+        health["cache"] = map[string]interface{}{
+            "status": "healthy",
+        }
+    }
+    
+    // Check queue
+    if err := checkQueue(); err != nil {
+        health["queue"] = map[string]interface{}{
+            "status": "unhealthy",
+            "error":  err.Error(),
+        }
+        health["status"] = "unhealthy"
+    } else {
+        health["queue"] = map[string]interface{}{
+            "status": "healthy",
+        }
+    }
+    
+    // Check disk space
+    if err := checkDiskSpace(); err != nil {
+        health["disk"] = map[string]interface{}{
+            "status": "unhealthy",
+            "error":  err.Error(),
+        }
+        health["status"] = "unhealthy"
+    } else {
+        health["disk"] = map[string]interface{}{
+            "status": "healthy",
+        }
+    }
+    
+    statusCode := http.StatusOK
+    if health["status"] == "unhealthy" {
+        statusCode = http.StatusServiceUnavailable
+    }
+    
+    return ctx.Response().Json(statusCode, http.Json{
+        "health": health,
+    })
+}
+
+// ✅ REQUIRED - Database health check
+func checkDatabase() error {
+    return facades.Orm().Query().Raw("SELECT 1").Error
+}
+
+// ✅ REQUIRED - Cache health check
+func checkCache() error {
+    return facades.Cache().Put("health_check", "ok", 1*time.Second)
+}
+
+// ✅ REQUIRED - Queue health check
+func checkQueue() error {
+    // Test queue connection
+    return facades.Queue().Job(&HealthCheckJob{}, []queue.Arg{}).Dispatch()
+}
+
+// ✅ REQUIRED - Disk space check
+func checkDiskSpace() error {
+    var stat syscall.Statfs_t
+    err := syscall.Statfs("/", &stat)
+    if err != nil {
+        return err
+    }
+    
+    // Check if disk usage is over 90%
+    freeBytes := stat.Bavail * uint64(stat.Bsize)
+    totalBytes := stat.Blocks * uint64(stat.Bsize)
+    usagePercent := float64(totalBytes-freeBytes) / float64(totalBytes) * 100
+    
+    if usagePercent > 90 {
+        return fmt.Errorf("disk usage is %.2f%%", usagePercent)
+    }
+    
+    return nil
+}
+```
+
+### Metrics Collection
+```go
+// ✅ REQUIRED - Application metrics
+func (c *MetricsController) GetMetrics(ctx http.Context) http.Response {
+    metrics := map[string]interface{}{
+        "application": map[string]interface{}{
+            "version":     facades.Config().GetString("app.version"),
+            "uptime":     getUptime(),
+            "goroutines": runtime.NumGoroutine(),
+            "memory": map[string]interface{}{
+                "alloc":      getMemoryStats().Alloc,
+                "total_alloc": getMemoryStats().TotalAlloc,
+                "sys":        getMemoryStats().Sys,
+                "num_gc":     getMemoryStats().NumGC,
+            },
+        },
+        "database": map[string]interface{}{
+            "connections": getDatabaseConnections(),
+            "queries":     getDatabaseQueryCount(),
+        },
+        "cache": map[string]interface{}{
+            "hits":   getCacheHits(),
+            "misses": getCacheMisses(),
+        },
+        "queue": map[string]interface{}{
+            "pending": getQueuePending(),
+            "failed":  getQueueFailed(),
+        },
+    }
+    
+    return ctx.Response().Json(http.StatusOK, http.Json{
+        "metrics": metrics,
+    })
+}
+```
+
+## Database Production Setup
+
+### Production Database Migrations
+```go
+// ✅ REQUIRED - Production database setup
+func (m *ProductionDatabaseSetup) Up() {
+    // Create users table
+    m.Schema().Create("users", func(table *schema.Blueprint) {
+        table.Increments("id")
+        table.String("name")
+        table.String("email").Unique()
+        table.String("password")
+        table.Integer("age")
+        table.Boolean("is_active").Default(true)
+        table.Timestamps()
+        
+        // Add indexes for performance
+        table.Index("email")
+        table.Index("is_active")
+        table.Index("created_at")
+    })
+    
+    // Create sessions table
+    m.Schema().Create("sessions", func(table *schema.Blueprint) {
+        table.String("id").Primary()
+        table.String("user_id").Nullable()
+        table.String("ip_address").Nullable()
+        table.Text("user_agent").Nullable()
+        table.LongText("payload")
+        table.Integer("last_activity")
+        
+        table.Index("user_id")
+        table.Index("last_activity")
+    })
+    
+    // Create jobs table
+    m.Schema().Create("jobs", func(table *schema.Blueprint) {
+        table.BigIncrements("id")
+        table.String("queue").Index()
+        table.LongText("payload")
+        table.TinyInteger("attempts").Unsigned()
+        table.Integer("reserved_at").Nullable().Unsigned()
+        table.Integer("available_at").Unsigned()
+        table.Integer("created_at").Unsigned()
+    })
+    
+    // Create failed_jobs table
+    m.Schema().Create("failed_jobs", func(table *schema.Blueprint) {
+        table.BigIncrements("id")
+        table.Text("uuid").Unique()
+        table.Text("connection")
+        table.Text("queue")
+        table.LongText("payload")
+        table.LongText("exception")
+        table.Timestamp("failed_at").UseCurrent()
+    })
+}
+```
+
+### Database Seeding
+```go
+// ✅ REQUIRED - Production database seeding
+func (s *ProductionSeeder) Run() {
+    // Create admin user
+    adminUser := &User{
+        Name:     "Admin User",
+        Email:    "admin@example.com",
+        Password: "admin123", // Will be hashed
+        Age:      30,
+        IsActive: true,
+    }
+    
+    // Hash password
+    hashedPassword, _ := facades.Hash().Make(adminUser.Password)
+    adminUser.Password = hashedPassword
+    
+    // Create user
+    facades.Orm().Query().Create(adminUser)
+    
+    // Create default settings
+    settings := []Setting{
+        {Key: "app_name", Value: "Goravel Production"},
+        {Key: "app_version", Value: "1.0.0"},
+        {Key: "maintenance_mode", Value: "false"},
+    }
+    
+    for _, setting := range settings {
+        facades.Orm().Query().Create(&setting)
+    }
+}
+```
+
+## Security Production Configuration
+
+### Security Headers
+```go
+// ✅ REQUIRED - Production security headers
+func setupSecurityHeaders() {
+    facades.Route().Use(func(ctx http.Context) {
+        // Security headers
+        ctx.Response().Header("X-Content-Type-Options", "nosniff")
+        ctx.Response().Header("X-Frame-Options", "DENY")
+        ctx.Response().Header("X-XSS-Protection", "1; mode=block")
+        ctx.Response().Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+        ctx.Response().Header("Content-Security-Policy", "default-src 'self'")
+        ctx.Response().Header("Referrer-Policy", "strict-origin-when-cross-origin")
+        ctx.Response().Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        
+        ctx.Next()
+    })
+}
+```
+
+### Rate Limiting
+```go
+// ✅ REQUIRED - Production rate limiting
+func setupRateLimiting() {
+    facades.Route().Use(func(ctx http.Context) {
+        ip := ctx.Request().Ip()
+        key := fmt.Sprintf("rate_limit:%s", ip)
+        
+        // Check rate limit
+        count := facades.Cache().GetInt(key, 0)
+        if count >= 100 { // 100 requests per minute
+            ctx.Response().Json(http.StatusTooManyRequests, http.Json{
+                "error": "Rate limit exceeded",
+            })
+            return
+        }
+        
+        // Increment counter
+        facades.Cache().Increment(key)
+        facades.Cache().Put(key, count+1, 1*time.Minute)
+        
+        ctx.Next()
+    })
+}
+```
+
+## Logging & Monitoring
+
+### Production Logging
+```go
+// ✅ REQUIRED - Production logging configuration
+func setupProductionLogging() {
+    // Configure log levels
+    logLevel := facades.Config().GetString("app.log_level", "info")
+    
+    // Setup structured logging
+    facades.Log().SetLevel(logLevel)
+    
+    // Log application startup
+    facades.Log().Info("Application started", map[string]any{
+        "version": facades.Config().GetString("app.version"),
+        "env":     facades.Config().GetString("app.env"),
+        "host":    facades.Config().GetString("app.host"),
+    })
+}
+```
+
+### Error Tracking
+```go
+// ✅ REQUIRED - Production error tracking
+func setupErrorTracking() {
+    facades.Route().Use(func(ctx http.Context) {
+        defer func() {
+            if r := recover(); r != nil {
+                // Log panic
+                facades.Log().Error("Panic recovered", map[string]any{
+                    "error": r,
+                    "path":  ctx.Request().Path(),
+                    "method": ctx.Request().Method(),
+                    "ip":    ctx.Request().Ip(),
+                })
+                
+                // Return error response
+                ctx.Response().Json(http.StatusInternalServerError, http.Json{
+                    "error": "Internal server error",
+                })
+            }
+        }()
+        
+        ctx.Next()
+    })
+}
+```
+
+## One-Click Deployment Scripts
+
+### Deployment Script
+```bash
+#!/bin/bash
+# ✅ REQUIRED - One-click deployment script
+
+set -e
+
+echo "🚀 Starting Goravel Production Deployment..."
+
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker is not installed. Please install Docker first."
+    exit 1
+fi
+
+# Check if Docker Compose is installed
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+    exit 1
+fi
+
+# Check if .env file exists
+if [ ! -f .env ]; then
+    echo "❌ .env file not found. Please create .env file with required variables."
+    exit 1
+fi
+
+# Validate environment variables
+echo "🔍 Validating environment variables..."
+source .env
+
+required_vars=("APP_KEY" "DB_HOST" "DB_DATABASE" "DB_USERNAME" "DB_PASSWORD" "JWT_SECRET")
+for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo "❌ Required environment variable $var is not set."
+        exit 1
+    fi
+done
+
+echo "✅ Environment variables validated."
+
+# Build application
+echo "🔨 Building application..."
+docker-compose build
+
+# Start services
+echo "🚀 Starting services..."
+docker-compose up -d
+
+# Wait for services to be ready
+echo "⏳ Waiting for services to be ready..."
+sleep 30
+
+# Run database migrations
+echo "🗄️ Running database migrations..."
+docker-compose exec app go run . artisan migrate --force
+
+# Run database seeding
+echo "🌱 Seeding database..."
+docker-compose exec app go run . artisan db:seed --force
+
+# Check health
+echo "🏥 Checking application health..."
+if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+    echo "✅ Application is healthy and ready!"
+    echo "🌐 Application is running at: http://localhost:8080"
+    echo "📊 Health check: http://localhost:8080/health"
+    echo "📈 Metrics: http://localhost:8080/metrics"
+else
+    echo "❌ Application health check failed. Please check the logs."
+    docker-compose logs app
+    exit 1
+fi
+
+echo "🎉 Deployment completed successfully!"
+```
+
+### Environment Template
+```bash
+# ✅ REQUIRED - Production .env template
+# Application Configuration
+APP_NAME="Goravel Production"
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://api.example.com
+APP_KEY=your-32-character-secret-key-here
+APP_TIMEZONE=UTC
+APP_VERSION=1.0.0
+APP_HOST=0.0.0.0:8080
+
+# Database Configuration
+DB_CONNECTION=mysql
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=goravel_production
+DB_USERNAME=goravel_user
+DB_PASSWORD=your-secure-password-here
+
+# Cache Configuration
+CACHE_STORE=redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# Queue Configuration
+QUEUE_CONNECTION=redis
+
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-key-here
+JWT_TTL=60
+JWT_REFRESH_TTL=1440
+
+# Mail Configuration
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@example.com
+MAIL_PASSWORD=your-email-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@example.com
+MAIL_FROM_NAME="Goravel Production"
+
+# Logging Configuration
+LOG_LEVEL=info
+LOG_CHANNEL=stack
+
+# Security Configuration
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=true
+SESSION_PATH=/
+SESSION_DOMAIN=
+SESSION_SECURE=true
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
+```
+
+## Production Best Practices Summary
+
+### Deployment Requirements
+- **One-Command Deployment**: Single command deploys entire application
+- **Environment Validation**: All required variables validated on startup
+- **Health Checks**: Comprehensive health monitoring
+- **Graceful Shutdown**: Proper shutdown handling
+- **Security**: Production-ready security configuration
+- **Monitoring**: Built-in metrics and logging
+- **Scalability**: Containerized and horizontally scalable
+
+### Quality Assurance
+- **Automated Testing**: All tests must pass before deployment
+- **Code Quality**: Static analysis and linting
+- **Security Scanning**: Vulnerability scanning
+- **Performance Testing**: Load testing and optimization
+- **Documentation**: Complete deployment documentation
+
+### Operational Excellence
+- **Monitoring**: Application and infrastructure monitoring
+- **Logging**: Structured logging with proper levels
+- **Alerting**: Automated alerting for critical issues
+- **Backup**: Automated backup strategies
+- **Recovery**: Disaster recovery procedures
+- **Maintenance**: Zero-downtime deployment capabilities

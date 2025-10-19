@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+---
+# Goravel Framework Specific Guidelines
+
+## Framework Features
+Goravel provides these key features similar to Laravel:
+- **ORM**: Database abstraction with model relationships
+- **HTTP**: Request/response handling with middleware
+- **Queue**: Background job processing
+- **Task Scheduling**: Cron-like task scheduling
+- **Logging**: Structured logging system
+- **Caching**: Multiple cache drivers
+- **Routing**: RESTful route definitions
+
+## Configuration Management
+- Store configuration in [config/](mdc:config/) directory
+- Use environment variables for sensitive data
+- Implement configuration caching for production
+- Use different config files for different environments
+
+## Database Operations
+- Use migrations for database schema changes
+- Implement seeders for test data
+- Use the ORM for database queries
+- Implement proper database transactions
+- Use database connection pooling
+
+## HTTP Layer
+- Implement proper middleware for cross-cutting concerns
+- Use request validation classes
+- Return consistent JSON responses
+- Implement proper error handling and status codes
+- Use route model binding where applicable
+
+## Queue System
+- Use queues for time-consuming tasks
+- Implement proper job classes
+- Handle job failures gracefully
+- Use different queue drivers as needed
+- Monitor queue performance
+
+## Caching Strategy
+- Use cache tags for cache invalidation
+- Implement cache warming strategies
+- Use different cache drivers (Redis, Memcached, etc.)
+- Implement cache-aside pattern
+- Monitor cache hit rates
+
+## Logging Best Practices
+- Use structured logging with context
+- Implement different log levels appropriately
+- Use log channels for different components
+- Implement log rotation and retention
+- Monitor application performance through logs
+
+## Deployment Considerations
+- Use Docker for containerization
+- Implement health checks
+- Use environment-specific configurations
+- Implement proper monitoring and alerting
+- Use CI/CD pipelines for automated deployment

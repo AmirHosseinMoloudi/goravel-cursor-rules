@@ -1,0 +1,268 @@
+---
+alwaysApply: true
+---
+
+# Goravel Facades
+
+Based on the [official Goravel facades documentation](https://www.goravel.dev/architecture-concepts/facades.html).
+
+## Facades Overview
+
+### Introduction
+- **Static Interface**: Provides "static" interface for core application functionality
+- **Flexible Syntax**: More flexible, elegant, and easy-to-test syntax
+- **Framework Integration**: All facades defined under `github.com/goravel/framework/facades`
+- **Easy Usage**: Simple import and usage pattern
+
+### Key Concepts
+- **Static Access**: Access framework services through static methods
+- **Service Resolution**: Facades resolve to underlying services from the container
+- **Testing Support**: Easy to mock and test with facades
+- **Framework Integration**: Tightly integrated with service container
+
+## Facade Usage
+
+### Basic Import and Usage
+```go
+import "github.com/goravel/framework/facades"
+
+// Use facades for framework services
+facades.Route().Run(facades.Config().GetString("app.host"))
+```
+
+### Common Facade Patterns
+```go
+// Configuration access
+host := facades.Config().GetString("app.host")
+debug := facades.Config().GetBool("app.debug")
+
+// Route registration
+facades.Route().Get("/users", userController.Index)
+facades.Route().Post("/users", userController.Store)
+
+// Database operations
+users := facades.Orm().Query().Where("active", true).Get()
+
+// Caching
+facades.Cache().Put("key", "value", 3600)
+value := facades.Cache().Get("key")
+
+// Logging
+facades.Log().Info("User logged in", map[string]any{"user_id": 1})
+```
+
+## How Facades Work
+
+### Service Provider Integration
+```go
+// Facades are instantiated in Service Providers
+func (config *ServiceProvider) Register() {
+    app := Application{}
+    facades.Config = app.Init()
+}
+```
+
+### Dependency Resolution
+```go
+// If facades use other facades, instantiate in Boot phase
+func (database *ServiceProvider) Boot() {
+    app := Application{}
+    facades.DB = app.Init()
+}
+```
+
+### Facade Lifecycle
+- **Registration Phase**: Basic facades instantiated in `Register()` method
+- **Boot Phase**: Facades with dependencies instantiated in `Boot()` method
+- **Service Resolution**: Facades resolve to underlying services
+- **Lazy Loading**: Services are resolved on-demand
+
+## Facade Class Reference
+
+### Core Framework Facades
+
+#### Application & Container
+- **App**: Service container access
+- **Config**: Configuration management
+- **Log**: Logging services
+
+#### HTTP & Routing
+- **Route**: HTTP routing
+- **RateLimiter**: Rate limiting
+- **Grpc**: gRPC services
+
+#### Database & ORM
+- **Orm**: Object-Relational Mapping
+- **Seeder**: Database seeding
+
+#### Security & Authentication
+- **Auth**: Authentication
+- **Gate**: Authorization
+- **Crypt**: Encryption
+- **Hash**: Hashing
+
+#### Background Services
+- **Queue**: Background job processing
+- **Schedule**: Task scheduling
+- **Mail**: Email services
+
+#### Storage & Cache
+- **Cache**: Caching services
+- **Storage**: File storage
+- **Event**: Event system
+
+#### Development & Testing
+- **Artisan**: Command console
+- **Testing**: Testing utilities
+- **Validation**: Input validation
+
+## Facade Best Practices
+
+### Usage Patterns
+- **Static Access**: Use facades for static access to framework services
+- **Service Resolution**: Facades automatically resolve to container services
+- **Testing**: Mock facades for testing
+- **Performance**: Facades are lightweight and efficient
+
+### Common Use Cases
+```go
+// Configuration access
+config := facades.Config().GetString("database.host")
+
+// Route registration
+facades.Route().Group(func(router contracts.Route) {
+    router.Get("/api/users", userController.Index)
+    router.Post("/api/users", userController.Store)
+})
+
+// Database queries
+users := facades.Orm().Query().Where("status", "active").Get()
+
+// Caching
+facades.Cache().Remember("users", 3600, func() any {
+    return facades.Orm().Query().Get()
+})
+
+// Logging with context
+facades.Log().With(map[string]any{
+    "user_id": 1,
+    "action": "login",
+}).Info("User logged in")
+
+// Authentication
+user := facades.Auth().User()
+if facades.Gate().Allows("update-post", post) {
+    // User can update post
+}
+```
+
+### Testing with Facades
+```go
+// Mock facades for testing
+func TestUserController(t *testing.T) {
+    // Mock the ORM facade
+    facades.Orm = &MockOrm{}
+    
+    // Test controller logic
+    controller := NewUserController()
+    response := controller.Index()
+    
+    // Assertions
+    assert.Equal(t, 200, response.StatusCode)
+}
+```
+
+## Development Guidelines
+
+### Facade Selection
+- **Use Appropriate Facades**: Choose the right facade for the task
+- **Avoid Overuse**: Don't use facades when direct injection is better
+- **Service Resolution**: Understand how facades resolve to services
+- **Performance**: Consider performance implications of facade usage
+
+### Service Integration
+- **Container Integration**: Facades resolve to container services
+- **Dependency Injection**: Use facades for static access to injected services
+- **Service Lifecycle**: Understand facade lifecycle and service resolution
+- **Testing**: Mock facades for isolated testing
+
+### Best Practices
+- **Consistent Usage**: Use facades consistently throughout the application
+- **Error Handling**: Handle errors from facade methods properly
+- **Documentation**: Document facade usage in your code
+- **Performance**: Monitor facade performance impact
+
+## Framework Integration
+
+### Service Container Integration
+- **Service Resolution**: Facades resolve to services in the container
+- **Dependency Injection**: Facades provide static access to injected services
+- **Lifecycle Management**: Facades follow service lifecycle patterns
+- **Testing**: Mock facades for testing service interactions
+
+### Service Provider Integration
+- **Facade Registration**: Register facades in service providers
+- **Dependency Management**: Handle facade dependencies properly
+- **Boot Process**: Initialize facades in appropriate service provider phases
+- **Testing**: Test facade registration and resolution
+
+### Configuration Integration
+- **Configuration Access**: Use Config facade for configuration access
+- **Environment Variables**: Access environment variables through Config facade
+- **Service Configuration**: Configure services through facades
+- **Testing**: Mock configuration facades for testing
+
+## Common Patterns
+
+### Configuration Pattern
+```go
+// Access configuration through Config facade
+func GetDatabaseConfig() DatabaseConfig {
+    return DatabaseConfig{
+        Host: facades.Config().GetString("database.host"),
+        Port: facades.Config().GetInt("database.port"),
+        Name: facades.Config().GetString("database.name"),
+    }
+}
+```
+
+### Route Pattern
+```go
+// Register routes using Route facade
+func RegisterRoutes() {
+    facades.Route().Group(func(router contracts.Route) {
+        router.Middleware("auth").Group(func(auth contracts.Route) {
+            auth.Get("/profile", userController.Profile)
+            auth.Put("/profile", userController.UpdateProfile)
+        })
+    })
+}
+```
+
+### Database Pattern
+```go
+// Use ORM facade for database operations
+func GetActiveUsers() ([]User, error) {
+    var users []User
+    err := facades.Orm().Query().Where("active", true).Get(&users)
+    return users, err
+}
+```
+
+### Cache Pattern
+```go
+// Use Cache facade for caching
+func GetCachedUsers() ([]User, error) {
+    var users []User
+    
+    return facades.Cache().Remember("active_users", 3600, func() any {
+        return facades.Orm().Query().Where("active", true).Get(&users)
+    }).([]User), nil
+}
+```
+
+## Performance Considerations
+- **Lazy Loading**: Facades resolve services on-demand
+- **Service Caching**: Services are cached after first resolution
+- **Memory Usage**: Be aware of facade memory usage
+- **Performance Monitoring**: Monitor facade performance impact

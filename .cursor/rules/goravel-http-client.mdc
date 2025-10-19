@@ -1,0 +1,879 @@
+---
+alwaysApply: true
+---
+
+# Goravel HTTP Client System
+
+Based on the [official Goravel HTTP client documentation](https://www.goravel.dev/digging-deeper/http-client.html).
+
+## HTTP Client Overview
+
+### Introduction
+- **Easy-to-Use API**: Goravel offers an easy-to-use, expressive, and minimalist API for HTTP requests
+- **Standard Library**: Built on the standard `net/http` library for reliability and performance
+- **Developer Experience**: Designed to enhance the developer experience with familiar patterns
+- **Microservice Integration**: Perfect for connecting to microservices or accessing third-party APIs
+
+### Key Concepts
+- **HTTP Facade**: Access HTTP client functionality through `facades.Http()`
+- **Response Interface**: Rich response interface for handling HTTP responses
+- **Request Building**: Fluent API for building complex HTTP requests
+- **Framework Integration**: Tightly integrated with Goravel's core systems
+
+## Configuration
+
+### HTTP Client Configuration
+```go
+// config/http.go
+package config
+
+import (
+    "github.com/goravel/framework/facades"
+    "time"
+)
+
+func init() {
+    config := facades.Config
+    config.Add("http", map[string]interface{}{
+        "client": map[string]any{
+            "base_url":                config.GetString("HTTP_CLIENT_BASE_URL"),  // "https://api.example.com"
+            "timeout":                 config.GetDuration("HTTP_CLIENT_TIMEOUT"), // 30 * time.Second
+            "max_idle_conns":          config.GetInt("HTTP_CLIENT_MAX_IDLE_CONNS"), // 100
+            "max_idle_conns_per_host": config.GetInt("HTTP_CLIENT_MAX_IDLE_CONNS_PER_HOST"), // 10
+            "max_conns_per_host":      config.GetInt("HTTP_CLIENT_MAX_CONN_PER_HOST"), // 0
+            "idle_conn_timeout":       config.GetDuration("HTTP_CLIENT_IDLE_CONN_TIMEOUT"), // 90 * time.Second
+        },
+    })
+}
+```
+
+### Configuration Options
+- **`base_url`**: Sets the root URL for relative paths. Automatically prefixes requests that don't start with `http://` or `https://`
+- **`timeout`** (DEFAULT: `30s`): Global timeout duration for complete request lifecycle (connection + any redirects + reading the response body)
+- **`max_idle_conns`**: Maximum number of idle (keep-alive) connections across all hosts
+- **`max_idle_conns_per_host`**: Maximum idle (keep-alive) connections to keep per-host
+- **`max_conns_per_host`**: Limits the total number of connections per host
+- **`idle_conn_timeout`**: Maximum amount of time an idle (keep-alive) connection will remain idle before closing itself
+
+### Environment Variables
+```bash
+# HTTP Client configuration
+HTTP_CLIENT_BASE_URL=https://api.example.com
+HTTP_CLIENT_TIMEOUT=30s
+HTTP_CLIENT_MAX_IDLE_CONNS=100
+HTTP_CLIENT_MAX_IDLE_CONNS_PER_HOST=10
+HTTP_CLIENT_MAX_CONN_PER_HOST=0
+HTTP_CLIENT_IDLE_CONN_TIMEOUT=90s
+```
+
+## Making Requests
+
+### Basic HTTP Verbs
+```go
+import "github.com/goravel/framework/facades"
+
+// GET request
+response, err := facades.Http().Get("https://example.com")
+
+// POST request
+response, err := facades.Http().Post("https://example.com/users", body)
+
+// PUT request
+response, err := facades.Http().Put("https://example.com/users/1", body)
+
+// DELETE request
+response, err := facades.Http().Delete("https://example.com/users/1")
+
+// PATCH request
+response, err := facades.Http().Patch("https://example.com/users/1", body)
+
+// HEAD request
+response, err := facades.Http().Head("https://example.com")
+
+// OPTIONS request
+response, err := facades.Http().Options("https://example.com")
+```
+
+### Response Handling
+```go
+// Check if request was successful
+if response.Successful() {
+    // Handle successful response
+    body, err := response.Body()
+    if err != nil {
+        // Handle error
+    }
+}
+
+// Check specific status codes
+if response.OK() {
+    // 200 OK
+}
+
+if response.Created() {
+    // 201 Created
+}
+
+if response.NotFound() {
+    // 404 Not Found
+}
+```
+
+## Response Interface
+
+### Response Methods
+```go
+type Response interface {
+    // Basic response methods
+    Body() (string, error)           // Get the response body as a string
+    Status() int                    // Get the HTTP status code
+    Headers() http.Header           // Get all response headers
+    Header(name string) string      // Get the value of a specific header
+    
+    // Status code checks
+    Successful() bool               // Check if the status code is in the 2xx range
+    Failed() bool                   // Check if the status code is not in the 2xx range
+    ClientError() bool              // Check if the status code is in the 4xx range
+    ServerError() bool              // Check if the status code is in the 5xx range
+    Redirect() bool                 // Check if the response is a redirect (3xx status code
+    
+    // JSON handling
+    Json() (map[string]any, error)   // Decode the response body as JSON into a map
+    
+    // Cookie handling
+    Cookie(name string) *http.Cookie // Get a specific cookie
+    Cookies() []*http.Cookie        // Get all response cookies
+    
+    // Specific status code methods
+    OK() bool                  // 200 OK
+    Created() bool             // 201 Created
+    Accepted() bool            // 202 Accepted
+    NoContent() bool           // 204 No Content
+    MovedPermanently() bool    // 301 Moved Permanently
+    Found() bool               // 302 Found
+    BadRequest() bool          // 400 Bad Request
+    Unauthorized() bool        // 401 Unauthorized
+    PaymentRequired() bool     // 402 Payment Required
+    Forbidden() bool           // 403 Forbidden
+    NotFound() bool            // 404 Not Found
+    RequestTimeout() bool      // 408 Request Timeout
+    Conflict() bool            // 409 Conflict
+    UnprocessableEntity() bool // 422 Unprocessable Entity
+    TooManyRequests() bool     // 429 Too Many Requests
+}
+```
+
+### Response Usage Examples
+```go
+// Get response body
+body, err := response.Body()
+if err != nil {
+    // Handle error
+}
+
+// Get JSON response
+data, err := response.Json()
+if err != nil {
+    // Handle JSON parsing error
+}
+
+// Check response status
+if response.Successful() {
+    // Process successful response
+} else if response.ClientError() {
+    // Handle client error (4xx)
+} else if response.ServerError() {
+    // Handle server error (5xx)
+}
+
+// Get specific header
+contentType := response.Header("Content-Type")
+
+// Get specific cookie
+sessionCookie := response.Cookie("session_id")
+```
+
+## URI Templates
+
+### Single URL Parameter
+```go
+// Replace single parameter in URL
+response, err := facades.Http().
+    WithUrlParameter("id", "123").
+    Get("https://api.example.com/users/{id}")
+// Resulting URL: https://api.example.com/users/123
+```
+
+### Multiple URL Parameters
+```go
+// Replace multiple parameters in URL
+response, err := facades.Http().
+    WithUrlParameters(map[string]string{
+        "bookId":        "456",
+        "chapterNumber": "7",
+    }).
+    Get("https://api.example.com/books/{bookId}/chapters/{chapterNumber}")
+// Resulting URL: https://api.example.com/books/456/chapters/7
+```
+
+### Dynamic URL Building
+```go
+// Build URLs dynamically
+func buildUserURL(userID string) string {
+    return fmt.Sprintf("https://api.example.com/users/%s", userID)
+}
+
+response, err := facades.Http().Get(buildUserURL("123"))
+```
+
+## Request Query Parameters
+
+### Single Query Parameter
+```go
+// Add single query parameter
+response, err := facades.Http().
+    WithQueryParameter("sort", "name").
+    Get("https://api.example.com/users")
+// Resulting URL: https://api.example.com/users?sort=name
+```
+
+### Multiple Query Parameters
+```go
+// Add multiple query parameters
+response, err := facades.Http().
+    WithQueryParameters(map[string]string{
+        "page":     "2",
+        "pageSize": "10",
+        "filter":   "active",
+    }).
+    Get("https://api.example.com/products")
+// Resulting URL: https://api.example.com/products?page=2&pageSize=10&filter=active
+```
+
+### Query String
+```go
+// Add query parameters as formatted string
+response, err := facades.Http().
+    WithQueryString("filter=active&order=price&limit=20").
+    Get("https://api.example.com/items")
+// Resulting URL: https://api.example.com/items?filter=active&order=price&limit=20
+```
+
+### Query Parameter Building
+```go
+// Build query parameters dynamically
+func buildQueryParams(params map[string]string) string {
+    var queryParts []string
+    for key, value := range params {
+        queryParts = append(queryParts, fmt.Sprintf("%s=%s", key, value))
+    }
+    return strings.Join(queryParts, "&")
+}
+
+params := map[string]string{
+    "page": "1",
+    "size": "10",
+    "sort": "name",
+}
+queryString := buildQueryParams(params)
+
+response, err := facades.Http().
+    WithQueryString(queryString).
+    Get("https://api.example.com/users")
+```
+
+## Sending Request Body
+
+### Basic Request Body
+```go
+import "github.com/goravel/framework/support/http"
+
+// Create request body
+builder := http.NewBody().SetField("name", "krishan")
+body, err := builder.Build()
+if err != nil {
+    // Handle error
+}
+
+// Send POST request with body
+response, err := facades.Http().
+    WithHeader("Content-Type", body.ContentType()).
+    Post("https://example.com/users", body.Reader())
+```
+
+### JSON Request Body
+```go
+// Create JSON request body
+userData := map[string]interface{}{
+    "name":  "John Doe",
+    "email": "john@example.com",
+    "age":   30,
+}
+
+jsonData, err := json.Marshal(userData)
+if err != nil {
+    // Handle error
+}
+
+response, err := facades.Http().
+    WithHeader("Content-Type", "application/json").
+    Post("https://example.com/users", strings.NewReader(string(jsonData)))
+```
+
+### Form Data Request Body
+```go
+// Create form data request body
+formData := url.Values{}
+formData.Set("name", "John Doe")
+formData.Set("email", "john@example.com")
+
+response, err := facades.Http().
+    WithHeader("Content-Type", "application/x-www-form-urlencoded").
+    Post("https://example.com/users", strings.NewReader(formData.Encode()))
+```
+
+### File Upload Request Body
+```go
+// Create multipart form data for file upload
+var buf bytes.Buffer
+writer := multipart.NewWriter(&buf)
+
+// Add file
+file, err := os.Open("path/to/file.jpg")
+if err != nil {
+    // Handle error
+}
+defer file.Close()
+
+part, err := writer.CreateFormFile("file", "file.jpg")
+if err != nil {
+    // Handle error
+}
+
+_, err = io.Copy(part, file)
+if err != nil {
+    // Handle error
+}
+
+// Add other fields
+writer.WriteField("name", "John Doe")
+writer.WriteField("email", "john@example.com")
+
+writer.Close()
+
+response, err := facades.Http().
+    WithHeader("Content-Type", writer.FormDataContentType()).
+    Post("https://example.com/upload", &buf)
+```
+
+## Headers
+
+### Single Header
+```go
+// Add single header
+response, err := facades.Http().
+    WithHeader("X-Custom-Header", "value").
+    Get("https://api.example.com")
+```
+
+### Multiple Headers
+```go
+// Add multiple headers
+response, err := facades.Http().
+    WithHeaders(map[string]string{
+        "Content-Type": "application/json",
+        "Accept":       "application/json",
+        "User-Agent":   "Goravel-HTTP-Client/1.0",
+    }).
+    Get("https://api.example.com")
+```
+
+### Accept Headers
+```go
+// Specify expected content type
+response, err := facades.Http().
+    Accept("application/xml").
+    Get("https://api.example.com")
+
+// Accept JSON (convenience method)
+response, err := facades.Http().
+    AcceptJson().
+    Get("https://api.example.com/data")
+```
+
+### Header Management
+```go
+// Replace all headers
+response, err := facades.Http().
+    ReplaceHeaders(map[string]string{
+        "Authorization": "Bearer token",
+        "Content-Type":  "application/json",
+    }).
+    Get("https://api.example.com")
+
+// Remove specific header
+response, err := facades.Http().
+    WithoutHeader("X-Previous-Header").
+    Get("https://api.example.com")
+
+// Clear all headers
+response, err := facades.Http().
+    FlushHeaders().
+    Get("https://api.example.com")
+```
+
+### Dynamic Header Building
+```go
+// Build headers dynamically
+func buildHeaders(authToken string, contentType string) map[string]string {
+    headers := map[string]string{
+        "User-Agent": "Goravel-HTTP-Client/1.0",
+    }
+    
+    if authToken != "" {
+        headers["Authorization"] = "Bearer " + authToken
+    }
+    
+    if contentType != "" {
+        headers["Content-Type"] = contentType
+    }
+    
+    return headers
+}
+
+headers := buildHeaders("your-token", "application/json")
+response, err := facades.Http().
+    WithHeaders(headers).
+    Get("https://api.example.com")
+```
+
+## Authentication
+
+### Basic Authentication
+```go
+// Basic authentication
+response, err := facades.Http().
+    WithBasicAuth("username", "password").
+    Get("https://api.example.com/protected")
+```
+
+### Bearer Token Authentication
+```go
+// Bearer token authentication
+response, err := facades.Http().
+    WithToken("your_bearer_token").
+    Get("https://api.example.com/api/resource")
+
+// Custom token type
+response, err := facades.Http().
+    WithToken("custom_token", "Token").
+    Get("https://api.example.com/api/resource")
+
+// Remove token
+response, err := facades.Http().
+    WithoutToken().
+    Get("https://api.example.com/api/resource")
+```
+
+### API Key Authentication
+```go
+// API key authentication
+response, err := facades.Http().
+    WithHeader("X-API-Key", "your-api-key").
+    Get("https://api.example.com/data")
+```
+
+### OAuth Authentication
+```go
+// OAuth authentication
+response, err := facades.Http().
+    WithHeader("Authorization", "OAuth " + oauthToken).
+    Get("https://api.example.com/oauth-protected")
+```
+
+## Context
+
+### Request Context
+```go
+import "context"
+
+// Create context with timeout
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+response, err := facades.Http().
+    WithContext(ctx).
+    Get("https://example.com")
+```
+
+### Context with Cancellation
+```go
+// Create context with cancellation
+ctx, cancel := context.WithCancel(context.Background())
+
+// Cancel after 3 seconds
+go func() {
+    time.Sleep(3 * time.Second)
+    cancel()
+}()
+
+response, err := facades.Http().
+    WithContext(ctx).
+    Get("https://example.com")
+```
+
+### Context with Deadline
+```go
+// Create context with deadline
+deadline := time.Now().Add(10 * time.Second)
+ctx, cancel := context.WithDeadline(context.Background(), deadline)
+defer cancel()
+
+response, err := facades.Http().
+    WithContext(ctx).
+    Get("https://example.com")
+```
+
+## Bind Response
+
+### Struct Binding
+```go
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+    Email string `json:"email"`
+}
+
+// Bind response to struct
+var user User
+response, err := facades.Http().
+    Bind(&user).
+    AcceptJson().
+    Get("https://jsonplaceholder.typicode.com/users/1")
+
+if err != nil {
+    fmt.Println("Error making request:", err)
+    return
+}
+
+fmt.Printf("User ID: %d, Name: %s, Email: %s\n", user.ID, user.Name, user.Email)
+```
+
+### Array Binding
+```go
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
+// Bind response to array
+var users []User
+response, err := facades.Http().
+    Bind(&users).
+    AcceptJson().
+    Get("https://jsonplaceholder.typicode.com/users")
+
+if err != nil {
+    fmt.Println("Error making request:", err)
+    return
+}
+
+for _, user := range users {
+    fmt.Printf("User ID: %d, Name: %s\n", user.ID, user.Name)
+}
+```
+
+### Nested Struct Binding
+```go
+type Address struct {
+    Street string `json:"street"`
+    City   string `json:"city"`
+    Zip    string `json:"zip"`
+}
+
+type User struct {
+    ID      int     `json:"id"`
+    Name    string  `json:"name"`
+    Address Address `json:"address"`
+}
+
+// Bind nested response
+var user User
+response, err := facades.Http().
+    Bind(&user).
+    AcceptJson().
+    Get("https://api.example.com/users/1")
+```
+
+## Cookie Management
+
+### Single Cookie
+```go
+// Send single cookie
+response, err := facades.Http().
+    WithCookie(&http.Cookie{
+        Name:  "user_id",
+        Value: "123",
+    }).
+    Get("https://example.com/profile")
+```
+
+### Multiple Cookies
+```go
+// Send multiple cookies
+response, err := facades.Http().
+    WithCookies([]*http.Cookie{
+        {Name: "session_token", Value: "xyz"},
+        {Name: "language", Value: "en"},
+        {Name: "theme", Value: "dark"},
+    }).
+    Get("https://example.com/dashboard")
+```
+
+### Cookie Management
+```go
+// Remove specific cookie
+response, err := facades.Http().
+    WithoutCookie("language").
+    Get("https://example.com")
+
+// Get cookies from response
+cookies := response.Cookies()
+for _, cookie := range cookies {
+    fmt.Printf("Cookie: %s = %s\n", cookie.Name, cookie.Value)
+}
+
+// Get specific cookie from response
+sessionCookie := response.Cookie("session_token")
+if sessionCookie != nil {
+    fmt.Printf("Session token: %s\n", sessionCookie.Value)
+}
+```
+
+## Advanced HTTP Client Patterns
+
+### Request Retry Logic
+```go
+func makeRequestWithRetry(url string, maxRetries int) (*http.Response, error) {
+    var lastErr error
+    
+    for i := 0; i < maxRetries; i++ {
+        response, err := facades.Http().Get(url)
+        if err == nil && response.Successful() {
+            return response, nil
+        }
+        
+        lastErr = err
+        time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+    }
+    
+    return nil, fmt.Errorf("failed after %d retries: %v", maxRetries, lastErr)
+}
+```
+
+### Request Logging
+```go
+func logRequest(method, url string, headers map[string]string) {
+    facades.Log().Info("Making HTTP request", map[string]any{
+        "method":  method,
+        "url":     url,
+        "headers": headers,
+    })
+}
+
+func makeLoggedRequest(url string) {
+    logRequest("GET", url, map[string]string{
+        "User-Agent": "Goravel-HTTP-Client/1.0",
+    })
+    
+    response, err := facades.Http().Get(url)
+    if err != nil {
+        facades.Log().Error("HTTP request failed", map[string]any{
+            "url":   url,
+            "error": err,
+        })
+        return
+    }
+    
+    facades.Log().Info("HTTP request completed", map[string]any{
+        "url":    url,
+        "status": response.Status(),
+    })
+}
+```
+
+### Request Middleware
+```go
+type HTTPMiddleware struct {
+    baseURL string
+    timeout time.Duration
+}
+
+func (m *HTTPMiddleware) Get(url string) (*http.Response, error) {
+    // Add base URL if not absolute
+    if !strings.HasPrefix(url, "http") {
+        url = m.baseURL + url
+    }
+    
+    // Create context with timeout
+    ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
+    defer cancel()
+    
+    return facades.Http().
+        WithContext(ctx).
+        Get(url)
+}
+
+func (m *HTTPMiddleware) Post(url string, body io.Reader) (*http.Response, error) {
+    if !strings.HasPrefix(url, "http") {
+        url = m.baseURL + url
+    }
+    
+    ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
+    defer cancel()
+    
+    return facades.Http().
+        WithContext(ctx).
+        Post(url, body)
+}
+```
+
+### API Client Wrapper
+```go
+type APIClient struct {
+    baseURL    string
+    authToken  string
+    httpClient *facades.Http
+}
+
+func NewAPIClient(baseURL, authToken string) *APIClient {
+    return &APIClient{
+        baseURL:    baseURL,
+        authToken:  authToken,
+        httpClient: facades.Http(),
+    }
+}
+
+func (c *APIClient) GetUser(userID string) (*User, error) {
+    var user User
+    response, err := c.httpClient.
+        WithToken(c.authToken).
+        Bind(&user).
+        AcceptJson().
+        Get(c.baseURL + "/users/" + userID)
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    if !response.Successful() {
+        return nil, fmt.Errorf("failed to get user: status %d", response.Status())
+    }
+    
+    return &user, nil
+}
+
+func (c *APIClient) CreateUser(user *User) error {
+    response, err := c.httpClient.
+        WithToken(c.authToken).
+        WithHeader("Content-Type", "application/json").
+        Post(c.baseURL+"/users", user)
+    
+    if err != nil {
+        return err
+    }
+    
+    if !response.Successful() {
+        return fmt.Errorf("failed to create user: status %d", response.Status())
+    }
+    
+    return nil
+}
+```
+
+## HTTP Client Best Practices
+
+### Design Principles
+- **Error Handling**: Always handle HTTP errors and check response status codes
+- **Timeout Management**: Use appropriate timeouts for different types of requests
+- **Resource Cleanup**: Properly close response bodies and handle context cancellation
+- **Security**: Use secure authentication methods and validate SSL certificates
+
+### Performance Considerations
+- **Connection Pooling**: Configure appropriate connection pool settings
+- **Request Batching**: Batch multiple requests when possible
+- **Caching**: Implement caching for frequently requested data
+- **Compression**: Use compression for large request/response bodies
+
+### Security Considerations
+- **HTTPS Only**: Always use HTTPS for production requests
+- **Token Security**: Store and transmit authentication tokens securely
+- **Input Validation**: Validate all inputs before making requests
+- **Rate Limiting**: Implement rate limiting to prevent abuse
+
+## Development Guidelines
+
+### HTTP Client Organization
+- **Client Wrappers**: Create wrapper classes for specific APIs
+- **Error Handling**: Implement consistent error handling patterns
+- **Logging**: Log requests and responses for debugging
+- **Testing**: Mock HTTP clients for testing
+
+### Testing HTTP Clients
+```go
+// Test HTTP client functionality
+func TestHTTPClient(t *testing.T) {
+    // Test basic GET request
+    response, err := facades.Http().Get("https://httpbin.org/get")
+    assert.NoError(t, err)
+    assert.True(t, response.Successful())
+    
+    // Test POST request
+    response, err = facades.Http().
+        WithHeader("Content-Type", "application/json").
+        Post("https://httpbin.org/post", strings.NewReader(`{"test": "data"}`))
+    assert.NoError(t, err)
+    assert.True(t, response.Successful())
+}
+
+// Test API client wrapper
+func TestAPIClient(t *testing.T) {
+    client := NewAPIClient("https://api.example.com", "test-token")
+    
+    user, err := client.GetUser("1")
+    assert.NoError(t, err)
+    assert.NotNil(t, user)
+}
+```
+
+### Monitoring and Maintenance
+- **Request Metrics**: Monitor request success rates and response times
+- **Error Tracking**: Track and analyze HTTP errors
+- **Performance Monitoring**: Monitor HTTP client performance
+- **Security Auditing**: Regularly audit HTTP client security
+
+## Best Practices
+
+### HTTP Client Design
+- **Consistent API**: Use consistent patterns for all HTTP operations
+- **Error Handling**: Implement comprehensive error handling
+- **Resource Management**: Properly manage HTTP resources
+- **Security**: Implement security best practices
+
+### Performance
+- **Connection Pooling**: Optimize connection pool settings
+- **Request Optimization**: Optimize request payloads and headers
+- **Caching**: Implement appropriate caching strategies
+- **Monitoring**: Monitor HTTP client performance
+
+### Security
+- **Authentication**: Use secure authentication methods
+- **Data Protection**: Protect sensitive data in requests
+- **Input Validation**: Validate all inputs
+- **Audit Logging**: Log HTTP requests for security auditing
+
+### Reliability
+- **Error Handling**: Handle all possible error conditions
+- **Retry Logic**: Implement retry logic for transient failures
+- **Circuit Breakers**: Use circuit breakers for external services
+- **Monitoring**: Monitor HTTP client health and performance

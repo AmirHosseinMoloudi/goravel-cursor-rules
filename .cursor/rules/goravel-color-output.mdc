@@ -1,0 +1,470 @@
+---
+alwaysApply: true
+---
+
+# Goravel Color Output System
+
+Based on the [official Goravel color output documentation](https://www.goravel.dev/digging-deeper/color.html).
+
+## Color Output Overview
+
+### Introduction
+- **Terminal Colorization**: The `color` package provides functions to colorize terminal output using PTerm library
+- **Easy Integration**: Simple methods to create colored output for better user experience
+- **Cross-platform Support**: Works across different terminal environments
+- **Framework Integration**: Seamlessly integrated with Goravel's console and logging systems
+
+### Key Concepts
+- **Color Package**: Access color functionality through `github.com/goravel/framework/support/color`
+- **Printer Interface**: `contracts/support.Printer` provides colorized output methods
+- **Specific Colors**: Predefined color methods for common colors
+- **Custom Colors**: Create custom color printers with specific color values
+
+## Specific Colors
+
+### Available Color Methods
+The package provides methods to create printers for specific colors:
+
+- **`color.Red()`** - Red text output
+- **`color.Green()`** - Green text output
+- **`color.Yellow()`** - Yellow text output
+- **`color.Blue()`** - Blue text output
+- **`color.Magenta()`** - Magenta text output
+- **`color.Cyan()`** - Cyan text output
+- **`color.White()`** - White text output
+- **`color.Black()`** - Black text output
+- **`color.Gray()`** - Gray text output
+- **`color.Default()`** - Default terminal color
+
+### Basic Color Usage
+```go
+import "github.com/goravel/framework/support/color"
+
+// Simple colored output
+color.Red().Println("Error message")
+color.Green().Println("Success message")
+color.Blue().Println("Info message")
+color.Yellow().Println("Warning message")
+```
+
+## Printer Methods
+
+### Available Printer Methods
+A `contracts/support.Printer` provides the following methods:
+
+- **`Print`** - Print text without newline
+- **`Println`** - Print text with a newline
+- **`Printf`** - Print formatted text
+- **`Sprint`** - Return colored text as string
+- **`Sprintln`** - Return colored text with newline as string
+- **`Sprintf`** - Return formatted colored text as string
+
+### Print Methods Examples
+```go
+import "github.com/goravel/framework/support/color"
+
+// Print methods
+color.Blue().Print("Hello, ")
+color.Blue().Println("Goravel!")
+
+// Formatted output
+color.Green().Printf("Hello, %s!", "Goravel")
+
+// String methods
+message := color.Red().Sprint("Error occurred")
+formattedMessage := color.Green().Sprintf("Success: %s", "Operation completed")
+```
+
+### Advanced Print Usage
+```go
+// Multiple colors in sequence
+color.Red().Print("ERROR: ")
+color.White().Println("Something went wrong")
+
+// Formatted colored output
+color.Cyan().Printf("Processing %d items...\n", 42)
+color.Green().Printf("Completed %s successfully\n", "operation")
+```
+
+## Custom Colors
+
+### Using `color.New`
+The `color.New` function creates a new color printer with specific color values:
+
+```go
+import "github.com/goravel/framework/support/color"
+
+// Custom red color
+color.New(color.FgRed).Println("Hello, Goravel!")
+
+// Custom color with different attributes
+color.New(color.FgBlue, color.Bold).Println("Bold blue text")
+```
+
+### Color Attributes
+```go
+// Foreground colors
+color.New(color.FgRed).Println("Red text")
+color.New(color.FgGreen).Println("Green text")
+color.New(color.FgBlue).Println("Blue text")
+
+// Background colors
+color.New(color.BgRed).Println("Red background")
+color.New(color.BgGreen).Println("Green background")
+
+// Text attributes
+color.New(color.Bold).Println("Bold text")
+color.New(color.Italic).Println("Italic text")
+color.New(color.Underline).Println("Underlined text")
+
+// Combined attributes
+color.New(color.FgRed, color.BgWhite, color.Bold).Println("Red bold text on white background")
+```
+
+## Console Integration
+
+### Artisan Command Colors
+```go
+// In Artisan commands
+func (c *MyCommand) Handle(ctx console.Context) error {
+    // Success message
+    color.Green().Println("✓ Command executed successfully")
+    
+    // Info message
+    color.Blue().Println("ℹ Processing data...")
+    
+    // Warning message
+    color.Yellow().Println("⚠ Warning: This operation may take time")
+    
+    // Error message
+    color.Red().Println("✗ Error: Operation failed")
+    
+    return nil
+}
+```
+
+### Progress Indicators
+```go
+// Progress with colors
+func (c *ProcessCommand) Handle(ctx console.Context) error {
+    items := []string{"item1", "item2", "item3"}
+    
+    for i, item := range items {
+        color.Cyan().Printf("Processing %d/%d: %s\n", i+1, len(items), item)
+        
+        // Simulate processing
+        time.Sleep(100 * time.Millisecond)
+        
+        color.Green().Println("✓ Completed")
+    }
+    
+    color.Green().Println("All items processed successfully")
+    return nil
+}
+```
+
+### Status Messages
+```go
+// Status-based coloring
+func (c *StatusCommand) Handle(ctx console.Context) error {
+    status := "running"
+    
+    switch status {
+    case "running":
+        color.Green().Println("● Service is running")
+    case "stopped":
+        color.Red().Println("● Service is stopped")
+    case "starting":
+        color.Yellow().Println("● Service is starting")
+    case "error":
+        color.Red().Println("● Service has errors")
+    }
+    
+    return nil
+}
+```
+
+## Logging Integration
+
+### Colored Log Messages
+```go
+// Custom logging with colors
+func (c *UserController) Show(ctx http.Context) http.Response {
+    // Log with colors
+    color.Blue().Println("INFO: User request received")
+    
+    user, err := c.userService.FindByID(ctx.Request().RouteInt("id"))
+    if err != nil {
+        color.Red().Printf("ERROR: Failed to find user: %v\n", err)
+        return ctx.Response().Json(http.StatusNotFound, http.Json{
+            "error": "User not found",
+        })
+    }
+    
+    color.Green().Printf("SUCCESS: User %s found\n", user.Name)
+    return ctx.Response().Success().Json(http.Json{
+        "user": user,
+    })
+}
+```
+
+### Debug Output
+```go
+// Debug information with colors
+func debugInfo(message string, data interface{}) {
+    color.Cyan().Printf("DEBUG: %s\n", message)
+    color.Gray().Printf("Data: %+v\n", data)
+}
+
+// Usage
+debugInfo("Processing user data", map[string]interface{}{
+    "user_id": 123,
+    "name":    "John Doe",
+    "email":   "john@example.com",
+})
+```
+
+## Error Handling with Colors
+
+### Error Categories
+```go
+// Different error types with appropriate colors
+func handleError(err error, category string) {
+    switch category {
+    case "validation":
+        color.Yellow().Printf("VALIDATION ERROR: %v\n", err)
+    case "database":
+        color.Red().Printf("DATABASE ERROR: %v\n", err)
+    case "network":
+        color.Magenta().Printf("NETWORK ERROR: %v\n", err)
+    case "permission":
+        color.Red().Printf("PERMISSION ERROR: %v\n", err)
+    default:
+        color.Red().Printf("ERROR: %v\n", err)
+    }
+}
+```
+
+### Success Messages
+```go
+// Success messages with colors
+func handleSuccess(operation string, details string) {
+    color.Green().Printf("✓ %s completed successfully\n", operation)
+    if details != "" {
+        color.Gray().Printf("  Details: %s\n", details)
+    }
+}
+
+// Usage
+handleSuccess("User creation", "User ID: 123, Email: john@example.com")
+```
+
+## Advanced Color Patterns
+
+### Color Themes
+```go
+// Define color themes
+type ColorTheme struct {
+    Success color.Printer
+    Error   color.Printer
+    Warning color.Printer
+    Info    color.Printer
+    Debug   color.Printer
+}
+
+func NewColorTheme() *ColorTheme {
+    return &ColorTheme{
+        Success: color.Green(),
+        Error:   color.Red(),
+        Warning: color.Yellow(),
+        Info:    color.Blue(),
+        Debug:   color.Cyan(),
+    }
+}
+
+// Usage
+theme := NewColorTheme()
+theme.Success.Println("Operation successful")
+theme.Error.Println("Operation failed")
+theme.Warning.Println("Please check your input")
+theme.Info.Println("Information message")
+theme.Debug.Println("Debug information")
+```
+
+### Conditional Coloring
+```go
+// Color based on conditions
+func printStatus(status string, message string) {
+    switch status {
+    case "success":
+        color.Green().Printf("✓ %s\n", message)
+    case "error":
+        color.Red().Printf("✗ %s\n", message)
+    case "warning":
+        color.Yellow().Printf("⚠ %s\n", message)
+    case "info":
+        color.Blue().Printf("ℹ %s\n", message)
+    default:
+        color.Default().Printf("%s\n", message)
+    }
+}
+```
+
+### Table Output with Colors
+```go
+// Colored table output
+func printTable(headers []string, rows [][]string) {
+    // Header
+    color.Bold().Println("┌─────────────────────────────────────┐")
+    for i, header := range headers {
+        if i > 0 {
+            color.Bold().Print("│")
+        }
+        color.Bold().Printf(" %-15s ", header)
+    }
+    color.Bold().Println("│")
+    color.Bold().Println("├─────────────────────────────────────┤")
+    
+    // Rows
+    for _, row := range rows {
+        for i, cell := range row {
+            if i > 0 {
+                color.Default().Print("│")
+            }
+            color.Default().Printf(" %-15s ", cell)
+        }
+        color.Default().Println("│")
+    }
+    color.Bold().Println("└─────────────────────────────────────┘")
+}
+```
+
+## Testing with Colors
+
+### Color Testing
+```go
+// Test color functionality
+func TestColorOutput(t *testing.T) {
+    // Test basic colors
+    redOutput := color.Red().Sprint("Error message")
+    assert.Contains(t, redOutput, "Error message")
+    
+    greenOutput := color.Green().Sprint("Success message")
+    assert.Contains(t, greenOutput, "Success message")
+    
+    // Test formatted output
+    formattedOutput := color.Blue().Sprintf("Hello, %s!", "World")
+    assert.Contains(t, formattedOutput, "Hello, World!")
+}
+```
+
+### Mock Color Output
+```go
+// Mock color for testing
+type MockColor struct {
+    output string
+}
+
+func (m *MockColor) Print(text string) {
+    m.output += text
+}
+
+func (m *MockColor) Println(text string) {
+    m.output += text + "\n"
+}
+
+func (m *MockColor) Printf(format string, args ...interface{}) {
+    m.output += fmt.Sprintf(format, args...)
+}
+
+func (m *MockColor) Sprint(text string) string {
+    return text
+}
+
+func (m *MockColor) Sprintln(text string) string {
+    return text + "\n"
+}
+
+func (m *MockColor) Sprintf(format string, args ...interface{}) string {
+    return fmt.Sprintf(format, args...)
+}
+```
+
+## Color Output Best Practices
+
+### Design Principles
+- **Consistent Usage**: Use consistent colors for similar message types
+- **Accessibility**: Ensure colors are readable in different terminal environments
+- **Performance**: Use colors efficiently without impacting performance
+- **User Experience**: Provide clear visual feedback to users
+
+### Performance Considerations
+- **Lazy Evaluation**: Colors are applied only when output is generated
+- **Memory Usage**: Minimal memory overhead for color functionality
+- **Terminal Compatibility**: Works across different terminal types
+- **Output Buffering**: Consider output buffering for large amounts of colored text
+
+### Security Considerations
+- **Input Validation**: Validate text before applying colors
+- **XSS Prevention**: Escape user input when using colors in web contexts
+- **Log Security**: Be careful with sensitive information in colored logs
+- **Terminal Security**: Consider terminal security implications
+
+## Development Guidelines
+
+### Color Organization
+- **Theme Management**: Organize colors into consistent themes
+- **Error Handling**: Use appropriate colors for different error types
+- **Status Indication**: Use colors to indicate system status
+- **User Feedback**: Provide clear visual feedback to users
+
+### Testing Color Output
+```go
+// Test color output functionality
+func TestColorFunctionality(t *testing.T) {
+    // Test specific colors
+    assert.NotNil(t, color.Red())
+    assert.NotNil(t, color.Green())
+    assert.NotNil(t, color.Blue())
+    
+    // Test custom colors
+    customColor := color.New(color.FgRed, color.Bold)
+    assert.NotNil(t, customColor)
+    
+    // Test output methods
+    output := color.Red().Sprint("test")
+    assert.Contains(t, output, "test")
+}
+```
+
+### Monitoring and Maintenance
+- **Color Usage**: Monitor color usage patterns
+- **Performance Impact**: Monitor performance impact of color usage
+- **Terminal Compatibility**: Test across different terminal environments
+- **User Feedback**: Gather feedback on color usage effectiveness
+
+## Best Practices
+
+### Color Design
+- **Consistent Themes**: Use consistent color themes throughout the application
+- **Accessibility**: Ensure colors are accessible to all users
+- **Readability**: Maintain good contrast and readability
+- **User Experience**: Design colors for optimal user experience
+
+### Performance
+- **Efficient Usage**: Use colors efficiently without performance impact
+- **Memory Management**: Monitor memory usage for color operations
+- **Output Optimization**: Optimize colored output generation
+- **Terminal Compatibility**: Ensure compatibility across terminal types
+
+### Security
+- **Input Validation**: Validate all text before applying colors
+- **Sensitive Data**: Be careful with sensitive information in colored output
+- **Log Security**: Secure colored log output
+- **Terminal Security**: Consider terminal security implications
+
+### Reliability
+- **Error Handling**: Handle color-related errors gracefully
+- **Fallback Support**: Provide fallback for unsupported terminals
+- **Testing**: Test color functionality thoroughly
+- **Monitoring**: Monitor color system health

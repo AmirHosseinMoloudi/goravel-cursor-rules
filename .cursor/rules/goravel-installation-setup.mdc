@@ -1,0 +1,106 @@
+---
+alwaysApply: true
+---
+
+# Goravel Installation & Setup Guide
+
+Based on the [official Goravel installation documentation](https://www.goravel.dev/getting-started/installation.html).
+
+## Server Requirements
+- **Golang >= 1.23** (Required minimum version)
+
+## Installation Methods
+
+### Using Goravel Installer (Recommended)
+```bash
+# Enter the directory where you want to install the project
+goravel new blog
+```
+
+### Manual Installation
+```bash
+# Download framework
+git clone --depth=1 https://github.com/goravel/goravel.git && rm -rf goravel/.git*
+
+# Install dependencies
+cd goravel && go mod tidy
+
+# Create .env environment configuration file
+cp .env.example .env
+
+# Generate application key
+go run . artisan key:generate
+```
+
+## Starting the HTTP Service
+
+### Basic Service Start
+```bash
+# Start service according to .env file in root directory
+go run .
+```
+
+### Custom Environment File
+```bash
+# Specify .env file to start service
+go run . --env=./.env
+```
+
+### Environment Variables
+```bash
+# Start service using environment variables
+APP_ENV=production APP_DEBUG=true go run .
+```
+
+### Live Reload Development
+```bash
+# Install cosmtrek/air for live reload
+air
+```
+
+**Windows Configuration**: Modify `.air.toml` file for Windows:
+```toml
+[build]
+  bin = "./storage/temp/main.exe"
+  cmd = "go build -o ./storage/temp/main.exe ."
+```
+
+## Configuration Management
+
+### Configuration Files
+- All configuration files are in the [config/](mdc:config/) directory
+- Configuration items have annotations for easy adjustment
+- Use environment-specific configurations
+
+### Application Key Generation
+```bash
+# Generate 32-bit application key for encryption/decryption
+go run . artisan key:generate
+```
+
+### JWT Token Generation
+```bash
+# Generate JWT token for authentication
+go run . artisan jwt:secret
+```
+
+### Environment File Encryption
+```bash
+# Encrypt .env file for production
+go run . artisan env:encrypt
+
+# Specify custom file name and key
+go run . artisan env:encrypt --name .env.safe --key BgcELROHL8sAV568T7Fiki7krjLHOkUc
+
+# Decrypt in production environment
+GORAVEL_ENV_ENCRYPTION_KEY=BgcELROHL8sAV568T7Fiki7krjLHOkUc go run . artisan env:decrypt
+
+# Or with specific parameters
+go run . artisan env:decrypt --name .env.safe --key BgcELROHL8sAV568T7Fiki7krjLHOkUc
+```
+
+## Development Workflow
+- Use `air` for live reload during development
+- Generate application keys after installation
+- Use encrypted environment files for production
+- Follow the Laravel-style command structure with `go run . artisan <command>`

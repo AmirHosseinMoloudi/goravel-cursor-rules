@@ -1,0 +1,100 @@
+---
+alwaysApply: true
+---
+
+# Goravel Configuration Management
+
+Based on the [official Goravel configuration documentation](https://www.goravel.dev/getting-started/configuration.html).
+
+## Configuration Structure
+
+### Configuration Files
+- All configuration files are stored in the [config/](mdc:config/) directory
+- Configuration items have annotations for easy adjustment
+- Use dot notation for nested configuration access
+- Support for environment-specific configurations
+
+### Environment Configuration
+- Use `.env.example` as template for environment variables
+- Copy `.env.example` to `.env` for local development
+- **Never commit `.env` files to version control**
+- Add new configuration items to `.env.example` for team synchronization
+- Use different configurations for different environments (local, staging, production)
+
+## Configuration Access Patterns
+
+### Environment Variables
+```go
+// Retrieve environment configuration with default values
+facades.Config().Env("APP_NAME", "goravel")
+facades.Config().Env("APP_DEBUG", "false")
+facades.Config().Env("DB_HOST", "localhost")
+```
+
+### Configuration Values
+```go
+// Access configuration using dot notation
+facades.Config().Get("app.name", "goravel")
+facades.Config().Get("database.connections.mysql.host", "localhost")
+
+// Type-specific configuration access
+facades.Config().GetString("app.name", "goravel")
+facades.Config().GetInt("app.port", 8080)
+facades.Config().GetBool("app.debug", false)
+```
+
+### Setting Configuration
+```go
+// Add simple configuration values
+facades.Config().Add("path", "value1")
+facades.Config().Add("path.with.dot.case1", "value1")
+
+// Add complex configuration objects
+facades.Config().Add("path.with.dot", map[string]any{
+    "case3": "value3",
+    "nested": map[string]any{
+        "key": "value",
+    },
+})
+```
+
+## Configuration Best Practices
+
+### Environment Management
+- Use environment variables for sensitive data (API keys, database credentials)
+- Implement different `.env` files for different environments
+- Use configuration caching in production for performance
+- Encrypt production environment files using `artisan env:encrypt`
+
+### Configuration Organization
+- Group related configurations in separate files
+- Use descriptive configuration keys
+- Provide default values for all configuration options
+- Document configuration options with comments
+
+### Security Considerations
+- Never expose sensitive configuration in version control
+- Use environment-specific configuration files
+- Implement proper secret management
+- Use encrypted environment files for production
+
+## Project Information
+
+### Artisan About Command
+```bash
+# View framework version and configuration
+go run . artisan about
+```
+
+### Configuration Validation
+- Validate configuration on application startup
+- Implement configuration health checks
+- Use configuration validation middleware
+- Monitor configuration changes in production
+
+## Development Workflow
+- Always use `.env.example` as the source of truth for configuration
+- Document all configuration options
+- Use type-safe configuration access methods
+- Implement configuration testing in CI/CD pipelines
+- Use configuration facades consistently throughout the application
